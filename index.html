@@ -141,6 +141,13 @@ var LS_FB='yf_coach_fb_v1';
 function loadFb(){ try{ return JSON.parse(localStorage.getItem(LS_FB)||'{}')||{}; }catch(e){ return {}; } }
 var FB=loadFb();
 function persistFb(){ try{ localStorage.setItem(LS_FB, JSON.stringify(FB)); }catch(e){} }
+/* 个人级反馈：{姓名:{b, means, prof, at}} —— 覆盖位置值；留空的项仍按位置 */
+var LS_FBP='yf_coach_fbp_v1';
+function loadFbp(){ try{ return JSON.parse(localStorage.getItem(LS_FBP)||'{}')||{}; }catch(e){ return {}; } }
+var FB_PLAYER=loadFbp();
+function persistFbp(){ try{ localStorage.setItem(LS_FBP, JSON.stringify(FB_PLAYER)); }catch(e){} }
+function fbProfOfP(n,k){ var o=FB_PLAYER[n]; if(o&&o.prof&&o.prof[k]!=null) return o.prof[k]; return null; }
+function fbMeanOfP(n,mid){ var o=FB_PLAYER[n]; if(o&&o.means&&o.means[mid]!=null) return o.means[mid]; return null; }
 /* 反馈对象：2013/2014 出生 + 王梓昊，按位置分组 */
 function fbEligible(){
   return (SNAP&&SNAP.team?SNAP.team:[]).filter(function(p){
@@ -508,11 +515,34 @@ function renderFeedbackCard(){
       '<div class="sep"></div><b style="font-size:13px">② 达标画像目标值（17 项，觉得不合理直接改）</b>'+
       '<div class="tblw"><table>'+profRows+'</table></div>'+
       '<button class="btn pri blk" style="margin-top:10px" onclick="saveFb(\''+esc(pos)+'\')">💾 保存「'+esc(pos)+'」反馈并回传</button>'+
+      '<div class="sep"></div><b style="font-size:13px">③ 或单独到个人（覆盖位置值；留空 = 按位置）</b>'+
+      groups[pos].map(function(p){
+        var pSaved=FB_PLAYER[p.n]?'<span class="tag t-ok" style="margin-left:6px">已单独反馈'+(FB_PLAYER[p.n].at?(' '+FB_PLAYER[p.n].at):'')+'</span>':'';
+        var pmRows=FB_MEANS.map(function(m){
+          var v=fbMeanOfP(p.n,m.k);
+          return '<div class="rec"><div style="flex:1"><b>'+esc(m.l)+'</b></div>'+
+            '<select id="fbpm_'+esc(p.n)+'_'+m.k+'" style="width:104px">'+
+            '<option value=""'+(v==null?' selected':'')+'>（按位置）</option>'+
+            [0,1,2,3].map(function(w){ return '<option value="'+w+'"'+(v===w?' selected':'')+'>'+'权重 '+w+'</option>'; }).join('')+
+            '</select></div>';
+        }).join('');
+        var ppRows=FB_META.map(function(m){
+          var pv=fbProfOfP(p.n,m.k), posv=fbProfOf(pos,m.k);
+          return '<tr><td>'+esc(m.l)+' <span class="hint">'+m.u+'</span></td>'+
+            '<td class="num" style="width:110px"><input id="fbpp_'+esc(p.n)+'_'+m.k+'" type="number" step="0.05" inputmode="decimal" value="'+(pv!=null?pv:'')+'" placeholder="'+(posv!=null?posv:'')+'" style="width:96px"></td></tr>';
+        }).join('');
+        return '<details style="margin-top:8px;margin-left:10px"><summary style="cursor:pointer;font-size:13px">👤 '+esc(p.n)+pSaved+'</summary>'+
+          '<div class="sep"></div><b style="font-size:12.5px">个人得分手段权重</b>'+pmRows+
+          '<div class="sep"></div><b style="font-size:12.5px">个人画像目标值（17 项；灰字=位置值）</b>'+
+          '<div class="tblw"><table>'+ppRows+'</table></div>'+
+          '<button class="btn pri blk" style="margin-top:10px" onclick="saveFbP(\''+esc(p.n)+'\',\''+esc(pos)+'\')">💾 保存「'+esc(p.n)+'」个人反馈并回传</button>'+
+          '</details>';
+      }).join('')+
       '</details>';
   }).join('');
   var pending=Object.keys(FB).length;
   return '<div class="card"><h2>📋 训练反馈（达标画像 + 得分手段）<span class="tag '+(pending?'t-ok':'t-na')+'" style="margin-left:6px">'+(pending?('已填 '+pending+' 个位置'):'未填')+'</span></h2>'+
-    '<p class="hint" style="margin:0 0 4px">反馈对象：2013 / 2014 出生 + 王梓昊。按位置填两件事：① 这个位置靠什么得分（权重 0-3）；② 17 项达标目标值合不合理（可直接改）。保存即自动回传给主帅，合并进他的达标画像与周期权重。</p>'+
+    '<p class="hint" style="margin:0 0 4px">反馈对象：2013 / 2014 出生 + 王梓昊。可按位置填（① 得分手段权重 0-3；② 17 项达标目标值，可直接改），也可展开到<b>个人单独设置</b>（个人值覆盖位置值，留空=按位置）。保存即自动回传给主帅。</p>'+
     cards+
     (pending?'<button class="btn blk" style="margin-top:10px" onclick="pushRet(false)">↻ 立即回传全部反馈</button>':'')+
     '</div>';
@@ -535,12 +565,40 @@ function saveFb(pos){
   render();
   flash('✅ 「'+pos+'」反馈已保存并回传给主帅', false);
 }
+function saveFbP(n, pos){
+  var means={}, prof={}, any=false;
+  FB_MEANS.forEach(function(m){
+    var el=document.getElementById('fbpm_'+n+'_'+m.k); if(!el) return;
+    if(el.value==='') return;
+    var v=parseInt(el.value,10); if(!(v>=0)) return;
+    means[m.k]=v; any=true;
+  });
+  FB_META.forEach(function(m){
+    var el=document.getElementById('fbpp_'+n+'_'+m.k); if(!el) return;
+    var v=parseFloat(el.value); if(isNaN(v)) return;
+    prof[m.k]=v; any=true;
+  });
+  if(!any){ flash('没有填任何个人值（留空 = 按位置）—— 要改哪项填哪项', true); return; }
+  var p=findP(n);
+  FB_PLAYER[n]={b:((p||{}).b||''), means:means, prof:prof, at:todayStr()}; persistFbp();
+  var pl={}; pl[n]={means:means, prof:prof};
+  pushPayload({fb:{ts:Date.now(), player:pl}}, false);
+  render();
+  flash('✅ 「'+n+'」个人反馈已保存并回传（个人值覆盖位置值）', false);
+}
 function allLocalFb(){
   var out={ts:Date.now(), means:{}, prof:{}};
   Object.keys(FB).forEach(function(pos){
     if(FB[pos].means) out.means[pos]=FB[pos].means;
     if(FB[pos].prof) out.prof[pos]=FB[pos].prof;
   });
+  if(Object.keys(FB_PLAYER).length){
+    out.player={};
+    Object.keys(FB_PLAYER).forEach(function(n){
+      var o=FB_PLAYER[n];
+      out.player[n]={means:o.means||{}, prof:o.prof||{}};
+    });
+  }
   return out;
 }
 function renderMyRecs(){
@@ -744,6 +802,24 @@ if(location.search.indexOf('__probe')>=0){
            o4 && o4.fb && o4.fb.means && o4.fb.means['主攻'] && o4.fb.means['主攻'].spike===3 &&
            o4.fb.prof && o4.fb.prof['主攻'] && o4.fb.prof['主攻'].cmj===55,
            t4?t4.slice(0,120):'空');
+        /* ── 个人级反馈：展开到个人 → 只填个人值 → 上云 fb.player ── */
+        FB={}; FB_PLAYER={}; render();
+        var fb2=document.getElementById('app').innerHTML;
+        ck('S19 个人表单渲染（主攻组每人 17 项画像 + 6 手段，默认按位置）',
+           (fb2.match(/fbpp_陶梓乐_/g)||[]).length===17 && (fb2.match(/fbpm_陶梓乐_/g)||[]).length===6 &&
+           (fb2.match(/fbpp_王梓昊_/g)||[]).length===17 && /（按位置）/.test(fb2),
+           '个人画像输入='+(fb2.match(/fbpp_陶梓乐_/g)||[]).length);
+        document.getElementById('fbpp_陶梓乐_cmj').value='58';
+        document.getElementById('fbpm_陶梓乐_spike').value='3';
+        SNAP.key=KEYSAVE;
+        saveFbP('陶梓乐','主攻');
+        await wait(700);
+        var t5=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var o5=t5?JSON.parse(t5):null;
+        ck('S20 保存个人反馈 → fb.player（姓名键：手段+画像）',
+           o5 && o5.fb && o5.fb.player && o5.fb.player['陶梓乐'] &&
+           o5.fb.player['陶梓乐'].prof.cmj===58 && o5.fb.player['陶梓乐'].means.spike===3,
+           t5?t5.slice(0,130):'空');
 
         SNAP.key=KEYSAVE;                      /* 恢复 key 再测代录回传 */
         ENT.recs=[{n:'肥胖乙', b:'2014', d:'2026-09-11', h:175, w:80.5, sent:0}];
