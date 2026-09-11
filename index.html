@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>身体监测 · 教练端 · YouthFit</title>
+<style>
+  :root{ --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --brand:#0f6e56; --brand-bg:#eef7f3; --red:#A32D2D; --red-bg:#fcebeb; --amber:#8a5a00; --amber-bg:#faeeda; --green:#3B6D11; --green-bg:#eaf3de; }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  body{margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; color:var(--ink); background:#f2f4f7;}
+  .wrap{max-width:860px; margin:0 auto; padding:14px 14px 44px;}
+  .hd{background:var(--brand); color:#fff; border-radius:14px; padding:16px; margin-bottom:12px;}
+  .hd h1{margin:0; font-size:19px;}
+  .hd p{margin:6px 0 0; font-size:12.5px; opacity:.92; line-height:1.6;}
+  .card{background:#fff; border:1px solid var(--line); border-radius:14px; padding:14px; margin-bottom:12px;}
+  .card h2{margin:0 0 10px; font-size:15px;}
+  /* 代录表单：2×2 网格 —— 修复此前 flex 挤压导致的输入框互相遮挡 */
+  .frow{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px; margin-bottom:12px;}
+  .frow .fld{min-width:0;}
+  label{display:block; font-size:12px; color:var(--muted); margin-bottom:4px;}
+  input,select{width:100%; padding:10px; font-size:16px; border:1px solid var(--line); border-radius:10px; background:#fff; color:var(--ink);}
+  input:focus,select:focus{outline:2px solid var(--brand); border-color:var(--brand);}
+  .btn{display:inline-block; border:0; border-radius:10px; padding:11px 16px; font-size:15px; font-weight:700; background:#e8edf2; color:var(--ink); cursor:pointer;}
+  .btn.pri{background:var(--brand); color:#fff;}
+  .btn.sm{padding:7px 12px; font-size:13.5px;}
+  .btn.blk{width:100%;}
+  .hint{font-size:12px; color:var(--muted); line-height:1.6;}
+  .tblw{overflow-x:auto;}
+  table{width:100%; border-collapse:collapse; font-size:13px;}
+  th,td{padding:7px 8px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap;}
+  th{font-size:11.5px; color:var(--muted); font-weight:600; background:#f8fafc;}
+  td.num,th.num{text-align:right;}
+  tbody.tr-click{cursor:pointer}
+  tbody.tr-click:hover td{background:#f8fafc}
+  tbody.sel td{background:var(--brand-bg)}
+  .stats{display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:12px;}
+  .stat{background:#fff; border:1px solid var(--line); border-radius:12px; padding:10px; text-align:center;}
+  .stat .n{font-size:22px; font-weight:800;}
+  .stat .l{font-size:11.5px; color:var(--muted); margin-top:2px;}
+  .stat.b .n{color:var(--red)} .stat.a .n{color:var(--amber)} .stat.g .n{color:var(--green)} .stat.n .n{color:#94a3b8}
+  .tag{display:inline-block; padding:1px 8px; border-radius:99px; font-size:11px; font-weight:700;}
+  .t-bad{background:var(--red-bg); color:var(--red);}
+  .t-warn{background:var(--amber-bg); color:var(--amber);}
+  .t-ok{background:var(--green-bg); color:var(--green);}
+  .t-na{background:#eef2f7; color:var(--muted);}
+  .t-un{background:#fdf0e0; color:var(--amber);}
+  .rec{display:flex; align-items:center; gap:8px; padding:8px 4px; border-bottom:1px dashed var(--line); font-size:14px;}
+  .rec:last-child{border-bottom:0;}
+  .rec .sp{flex:1}
+  .rec button{border:0; background:none; color:#b45309; cursor:pointer; font-size:15px; padding:2px 6px;}
+  textarea{width:100%; min-height:90px; font-family:monospace; font-size:11px; padding:8px; border:1px solid var(--line); border-radius:10px; background:#f8fafc; color:var(--ink); word-break:break-all;}
+  details summary{cursor:pointer; font-size:13px; color:var(--muted);}
+  .note{padding:10px 12px; border-left:4px solid var(--brand); background:var(--brand-bg); border-radius:8px; font-size:13.5px; font-weight:600; line-height:1.7;}
+  .note.bad{border-left-color:var(--red); background:var(--red-bg); color:var(--red);}
+  .note.warn{border-left-color:var(--amber); background:var(--amber-bg); color:var(--amber);}
+  .note.good{border-left-color:var(--green); background:var(--green-bg); color:var(--green);}
+  .chart{width:100%; height:auto; display:block;}
+  .ok{color:var(--brand); font-weight:700;}
+  .sep{height:1px; background:var(--line); margin:12px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <h1>📏 身体监测 · 教练端</h1>
+    <p id="hdSub">与主帅端同一套算法评分（分低=需介入）：图表为主视图、团队按严重程度排序；可设每周目标（自动同步给主帅）；代录身高/体重<b>自动回传</b>（无需回传码）。</p>
+  </div>
+  <div id="app"><div class="card"><p class="hint">加载中…</p></div></div>
+</div>
+
+<script>
+/* ══════════ 身体监测 · 主教练端（与 YouthFit 身体监测页同口径）══════════
+ * 评分：快照 v3 直接携带主帅端 assessWeightNeed 的 sc/al/sl（不另写算法）——
+ *   排序 = 等级（需介入→需关注→合理→待录入）→ 同级按分数从低到高（分低=更严重）。
+ *   「需增肌」和超重一样是问题：低体重同样会被评为低分，排前面。
+ * 图表：个人趋势图为详情卡第一屏（主视图），其余内容跟在后面。
+ * 每周目标：教练可设，保存后随 <key>-ret 上云，主帅端拉取同步进他的每周目标表。
+ * 代录：保存即自动上云 <key>-ret；主帅在 YouthFit「拉取主教练回传」一键合并。 */
+function b64decUtf8(s){
+  var bin=atob(s), b=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++) b[i]=bin.charCodeAt(i);
+  return new TextDecoder().decode(b);
+}
+function b64encUtf8(str){
+  var b=new TextEncoder().encode(str), s='';
+  for(var i=0;i<b.length;i++) s+=String.fromCharCode(b[i]);
+  return btoa(s);
+}
+var LS_SNAP='yf_coach_snap_last', LS_ENT='yf_coach_body_v1', LS_KEY='yf_coach_key_last';
+function storedKey(){ try{ return localStorage.getItem(LS_KEY)||''; }catch(e){ return ''; } }
+function rememberKey(k){ if(k){ try{ localStorage.setItem(LS_KEY,k); }catch(e){} } }
+var SNAP=null, SNAP_SRC='';
+var KEY_PARAM=(function(){ var m=location.search.match(/[?&]key=([0-9a-zA-Z_-]{6,60})/); return m?m[1]:''; })();
+if(KEY_PARAM) rememberKey(KEY_PARAM);          /* 打开过一次短链，之后裸地址也知道去云端拉哪份 */
+(function(){
+  var h=location.hash.slice(1);
+  if(h.indexOf('SNP1.')===0){ try{ SNAP=JSON.parse(b64decUtf8(h.slice(5))); SNAP_SRC='链接'; }catch(e){ SNAP=null; } }
+  if((!SNAP || !SNAP.team || !SNAP.team.length) && window.__SNAP_INLINE){ SNAP=window.__SNAP_INLINE; SNAP_SRC='内嵌'; }
+  if(!SNAP){
+    try{
+      var last=JSON.parse(localStorage.getItem(LS_SNAP)||'null');
+      if(last && last.snap && last.snap.team && last.snap.team.length){ SNAP=last.snap; SNAP_SRC='缓存'; }
+    }catch(e){}
+  }
+  if(SNAP && SNAP.team && SNAP.team.length){
+    if(SNAP.key) rememberKey(SNAP.key);
+    try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
+  }
+})();
+function $(id){ return document.getElementById(id); }
+function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function weekMon(){ var d=new Date(); var dw=(d.getDay()+6)%7; d.setDate(d.getDate()-dw); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function addDaysStr(ds,n){ var d=new Date(ds+'T00:00:00'); d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function loadEnt(){ try{ var o=JSON.parse(localStorage.getItem(LS_ENT)||'null'); return (o&&o.recs)?o:{recs:[]}; }catch(e){ return {recs:[]}; } }
+var ENT=loadEnt();
+function persistEnt(){ try{ localStorage.setItem(LS_ENT, JSON.stringify(ENT)); }catch(e){} }
+/* 训练反馈表单元数据（与主帅端同口径）：17 测试项 × 5 位置画像 + 6 得分手段权重 */
+var FB_META=[
+  {k:'cmj',l:'纵跳 CMJ',u:'cm',gte:true},{k:'sj',l:'蹲跳 SJ',u:'cm',gte:true},
+  {k:'bj_h',l:'跳箱高度',u:'cm',gte:true},{k:'dj_h',l:'跳深高度',u:'cm',gte:true},
+  {k:'bs1rm',l:'后蹲相对力量',u:'×BW',gte:true},{k:'bp1rm',l:'卧推相对力量',u:'×BW',gte:true},
+  {k:'pp1rm',l:'借力推相对力量',u:'×BW',gte:true},{k:'pc1rm',l:'高翻相对力量',u:'×BW',gte:true},
+  {k:'snatch1rm',l:'抓举相对力量',u:'×BW',gte:true},{k:'cnj1rm',l:'挺举相对力量',u:'×BW',gte:true},
+  {k:'pushup',l:'俯卧撑',u:'次',gte:true},{k:'pullup',l:'引体向上',u:'次',gte:true},
+  {k:'hang',l:'屈臂悬垂',u:'s',gte:true},{k:'plank',l:'平板支撑',u:'s',gte:true},
+  {k:'sprint10',l:'10m 冲刺',u:'s',gte:false},{k:'sprint20',l:'20m 冲刺',u:'s',gte:false},
+  {k:'cod505',l:'505 变向',u:'s',gte:false}
+];
+var FB_MEANS=[
+  {k:'spike',l:'扣球/强攻',d:'最主要得分手段：依赖纵跳高度、出手速度与上肢爆发'},
+  {k:'serve',l:'发球',d:'跳发直接得分 / 破坏一传：依赖上肢爆发与动作连贯'},
+  {k:'block',l:'拦网',d:'直接得分与限制：依赖纵跳、反应与核心稳定'},
+  {k:'quick_attack',l:'快攻/战术攻',d:'副攻短平快、背飞：依赖节奏、协调与爆发'},
+  {k:'backrow',l:'后排进攻',d:'立体进攻：依赖纵跳与核心'},
+  {k:'defense',l:'防守反击',d:'防起后反击得分：依赖移动速度、灵敏与反应'}
+];
+var FB_POS=['主攻','副攻','接应','二传','自由人'];
+var LS_FB='yf_coach_fb_v1';
+function loadFb(){ try{ return JSON.parse(localStorage.getItem(LS_FB)||'{}')||{}; }catch(e){ return {}; } }
+var FB=loadFb();
+function persistFb(){ try{ localStorage.setItem(LS_FB, JSON.stringify(FB)); }catch(e){} }
+/* 反馈对象：2013/2014 出生 + 王梓昊，按位置分组 */
+function fbEligible(){
+  return (SNAP&&SNAP.team?SNAP.team:[]).filter(function(p){
+    return /^201[34]$/.test(String(p.b||'')) || p.n==='王梓昊';
+  });
+}
+function fbGroups(){
+  var g={};
+  fbEligible().forEach(function(p){
+    var pos=String(p.p||'').split('/')[0].trim() || '未填位置';
+    (g[pos]||(g[pos]=[])).push(p);
+  });
+  return g;
+}
+function fbProfOf(pos,k){
+  if(FB[pos] && FB[pos].prof && FB[pos].prof[k]!=null) return FB[pos].prof[k];
+  if(SNAP.prof && SNAP.prof[pos] && SNAP.prof[pos][k]!=null) return SNAP.prof[pos][k];
+  return null;
+}
+function fbMeanOf(pos,mid){
+  if(FB[pos] && FB[pos].means && FB[pos].means[mid]!=null) return FB[pos].means[mid];
+  if(SNAP.means && SNAP.means[mid]!=null) return SNAP.means[mid];
+  return 0;
+}
+/* 截止目标（本机）：{姓名: {t:目标kg, by:截止日}} —— 「到某日期降到某 kg」，随 <key>-ret 同步给主帅 */
+var LS_G='yf_coach_goal_v1';
+function loadG(){ try{ return JSON.parse(localStorage.getItem(LS_G)||'{}')||{}; }catch(e){ return {}; } }
+var G=loadG();
+function persistG(){ try{ localStorage.setItem(LS_G, JSON.stringify(G)); }catch(e){} }
+function goalOf(p){
+  var lg=G[p.n]; if(lg && lg.t && lg.by) return lg;
+  return (p.goal && p.goal.t && p.goal.by) ? p.goal : null;   /* 主帅快照里带的 */
+}
+function findP(n){ return (SNAP&&SNAP.team?SNAP.team:[]).filter(function(x){ return x.n===n; })[0] || null; }
+/* 称重史：v3 快照用 hist（全量）；老快照没有 hist 时退回 recs —— 老数据也能连成线 */
+function histOf(p){ return (p && p.hist && p.hist.length) ? p.hist : ((p && p.recs) || []); }
+function lastHFor(n){ var p=findP(n); if(p&&p.h) return p.h; for(var i=ENT.recs.length-1;i>=0;i--){ if(ENT.recs[i].n===n && ENT.recs[i].h) return ENT.recs[i].h; } return null; }
+function retKey(){ var k=(SNAP&&SNAP.key)||KEY_PARAM||''; return k?k+'-ret':''; }
+/* 严重度排序（与主帅端同口径）：快照 v3 带 sc/al —— 等级优先，同级分数从低到高（分低=最严重，排最前） */
+var AL_PRI={bad:0, warn:1, low:2, ok:3, unknown:4};
+function alOf(p){
+  if(p.al) return p.al;
+  if(p.lvl) return p.lvl;
+  var st=String(p.st||'');                       /* v1 快照没有等级字段 → 按状态名推 */
+  if(/肥胖/.test(st)) return 'bad';
+  if(/超重|需减/.test(st)) return 'warn';
+  if(/需增肌|偏瘦/.test(st)) return 'low';
+  if(/正常|合理/.test(st)) return 'ok';
+  return 'unknown';
+}
+function scOf(p){ return (typeof p.sc==='number') ? p.sc : null; }
+function stTag(st){ st=String(st||'无数据');
+  if(/肥胖|需介入/.test(st)) return '<span class="tag t-bad">🔴 '+esc(st)+'</span>';
+  if(/超重|需减|关注/.test(st)) return '<span class="tag t-warn">🟡 '+esc(st)+'</span>';
+  if(/需增肌/.test(st)) return '<span class="tag t-warn">🔽 '+esc(st)+'</span>';
+  if(/正常|合理/.test(st)) return '<span class="tag t-ok">🟢 '+esc(st)+'</span>';
+  return '<span class="tag t-na">'+esc(st)+'</span>'; }
+function srOf(p){
+  if(p.sr) return p.sr;                              /* 快照 v3：电脑端算好的短因 */
+  var st=String(p.st||'');
+  if(/肥胖|超重/.test(st)) return '需减重';
+  if(/需增肌|偏瘦/.test(st)) return '需增肌';
+  if(/正常/.test(st)) return '合理';
+  return '—';
+}
+function statusTag(p){                               /* 与电脑端团队表完全同款 */
+  var al=alOf(p), txt=srOf(p);
+  if(al==='bad')  return '<span class="tag t-bad">🔴 '+esc(txt)+'</span>';
+  if(al==='warn') return '<span class="tag t-warn">🟡 '+esc(txt)+'</span>';
+  if(al==='low')  return '<span class="tag t-warn">🟡 '+esc(txt)+'</span>';
+  if(al==='ok')   return '<span class="tag t-ok">🟢 '+esc(txt)+'</span>';
+  return '<span class="tag t-na">—</span>';
+}
+function bdOf(p){ return p.bd || (p.b ? p.b : '—'); }   /* 出生日期：v3 带全日期，老快照回落出生年 */
+function scoreTag(p){
+  var sc=scOf(p), al=alOf(p);
+  if(sc==null) return '<span class="tag t-na">—</span>';
+  var cls = al==='bad'?'t-bad':(al==='warn'?'t-warn':(al==='low'?'t-warn':(al==='ok'?'t-ok':'t-na')));
+  return '<span class="tag '+cls+'">'+sc+'</span>';
+}
+function goalLine(p){
+  var g=goalOf(p); if(!g || !p.w) return '';
+  var need=Math.round((p.w-g.t)*10)/10;
+  if(!need) return '';
+  var days=Math.round((new Date(g.by+'T00:00:00') - new Date(todayStr()+'T00:00:00'))/86400000);
+  if(days<=0) return '<div class="hint" style="margin-top:4px">🎯 截止目标：'+esc(g.by)+' 已到 —— 当前 '+p.w+'kg'+(need>0?('，未到 '+g.t+'kg'):'（已达标）')+'</div>';
+  var weeks=days/7, rate=Math.abs(need)/weeks;
+  var col = rate<=0.5 ? 'var(--green)' : (rate<=0.75 ? 'var(--amber)' : 'var(--red)');
+  var verdict = rate<=0.5 ? '✓ 安全速率内' : (rate<=0.75 ? '⚠ 略超安全速率' : '❌ 超过安全速率，建议调整目标或延期');
+  return '<div class="hint" style="margin-top:4px">🎯 截止目标：'+p.w+'kg → '+(need>0?'减到':'增到')+' <b>'+g.t+'kg</b>（'+esc(g.by)+'）· 还差 <b>'+Math.abs(need)+'kg</b> · 剩 '+weeks.toFixed(1)+' 周 · 需 <b style="color:'+col+'">'+rate.toFixed(2)+'kg/周</b> '+verdict+'</div>';
+}
+function verdict(target, actual){
+  if(target==null) return '<span class="tag t-na">未设目标</span>';
+  if(actual==null) return '<span class="tag t-na">未称重</span>';
+  var diff=Math.round((actual-target)*10)/10;
+  return (diff>0?'+':'')+diff+'kg '+(Math.abs(diff)<=0.5?'<span class="tag t-ok">✓达标</span>':'<span class="tag t-bad">✗未达</span>');
+}
+function curWeekTarget(p){
+  if(!p||!p.wt||!p.wt.length) return null;   /* 每周目标由主帅在 YouthFit 设，教练端只读 */
+  var wk=weekMon(); for(var i=0;i<p.wt.length;i++){ if(p.wt[i][0]===wk) return p.wt[i][1]; } return null;
+}
+function sortedTeam(){
+  var t=(SNAP&&SNAP.team?SNAP.team:[]).slice();
+  t.sort(function(a,b){
+    var sa=scOf(a), sb=scOf(b);
+    if(sa!=null && sb!=null && sa!==sb) return sa-sb;   /* 分数从低到高：分低=更严重，排最前（需增肌和超重同权竞争） */
+    var ra=AL_PRI[alOf(a)]!=null?AL_PRI[alOf(a)]:9, rb=AL_PRI[alOf(b)]!=null?AL_PRI[alOf(b)]:9;
+    if(ra!==rb) return ra-rb;                            /* 没分数的老快照 → 按等级 */
+    return (b.bmi||0)-(a.bmi||0);
+  });
+  return t;
+}
+function selName(){ try{ return localStorage.getItem('yf_coach_sel')||''; }catch(e){ return ''; } }
+function setSelName(n){ try{ localStorage.setItem('yf_coach_sel', n); }catch(e){} }
+/* 体重趋势 SVG：实线=体重，虚线=位置标准体重 / 本周目标；
+   设了截止目标 → 再画一条「计划线」：从当前体重连到截止日期的目标点，图上直接看到目标与期限 —— 详情卡的主视图 */
+function trendSVG(p){
+  var pts=histOf(p).filter(function(r){ return r[2]; }).slice().sort(function(a,b){ return a[0]<b[0]?-1:1; });
+  if(pts.length<2) return '<p class="hint">称重不足 2 次 —— 还画不了趋势，记录后会自动出图。</p>';
+  var W=720,H=200,PL=40,PR=12,PT=14,PB=26;
+  var STD=stdWOf(p), wtc=curWeekTarget(p), g=goalOf(p);
+  /* X 轴按日期刻度：有截止目标时把截止日纳入范围，才能画出「未来段」 */
+  var dmin=pts[0][0], dmax=pts[pts.length-1][0], gEnd=null;
+  if(g && g.t && g.by && g.by>dmax){ gEnd={d:g.by, w:g.t}; dmax=g.by; }
+  var t0=new Date(dmin+'T00:00:00').getTime(), t1=new Date(dmax+'T00:00:00').getTime();
+  function X(ds){ return PL+(W-PL-PR)*((new Date(ds+'T00:00:00').getTime()-t0)/Math.max(1,t1-t0)); }
+  function Y(v){ return PT+(H-PT-PB)*(1-(v-lo)/(hi-lo)); }
+  var ws=pts.map(function(x){ return x[2]; });
+  var refs=[]; if(STD) refs.push(STD);
+  if(wtc) refs.push(wtc);
+  if(gEnd) refs.push(gEnd.w);
+  var lo=Math.min.apply(null, ws.concat(refs)), hi=Math.max.apply(null, ws.concat(refs));
+  var pad=(hi-lo)||2; lo-=pad*0.18; hi+=pad*0.18;
+  var pl='', dots='';
+  pts.forEach(function(p2){
+    pl+=(pl?' ':'')+X(p2[0]).toFixed(1)+','+Y(p2[2]).toFixed(1);
+    dots+='<circle cx="'+X(p2[0]).toFixed(1)+'" cy="'+Y(p2[2]).toFixed(1)+'" r="3.2" fill="#0f6e56"><title>'+esc(p2[0])+' '+p2[2]+'kg</title></circle>';
+  });
+  var refs2='';
+  if(STD) refs2+='<line x1="'+PL+'" y1="'+Y(STD).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(STD).toFixed(1)+'" stroke="#BA7517" stroke-dasharray="6 4" stroke-width="1.4"/>'+
+    '<text x="'+(W-PR)+'" y="'+(Y(STD)-5).toFixed(1)+'" text-anchor="end" font-size="11" fill="#BA7517">位置标准 '+STD+'kg</text>';
+  if(wtc) refs2+='<line x1="'+PL+'" y1="'+Y(wtc).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(wtc).toFixed(1)+'" stroke="#A32D2D" stroke-dasharray="6 4" stroke-width="1.4"/>'+
+    '<text x="'+(W-PR)+'" y="'+(Y(wtc)+13).toFixed(1)+'" text-anchor="end" font-size="11" fill="#A32D2D">本周目标 '+wtc+'kg</text>';
+  /* 截止目标计划线：当前体重 → 截止日的目标点（红虚线 + 端点标记） */
+  var goalSeg='';
+  if(gEnd){
+    var x0=X(pts[pts.length-1][0]).toFixed(1), y0=Y(pts[pts.length-1][2]).toFixed(1);
+    var x1=X(gEnd.d).toFixed(1), y1=Y(gEnd.w).toFixed(1);
+    goalSeg='<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y1+'" stroke="#A32D2D" stroke-dasharray="3 4" stroke-width="2"/>'+
+      '<circle cx="'+x1+'" cy="'+y1+'" r="4.5" fill="#A32D2D"><title>截止目标 '+gEnd.d+' '+gEnd.w+'kg</title></circle>'+
+      '<text x="'+Math.min(W-PR,+x1).toFixed(1)+'" y="'+(+y1-8).toFixed(1)+'" text-anchor="end" font-size="11" font-weight="700" fill="#A32D2D">截止目标 '+gEnd.w+'kg · '+gEnd.d.slice(5)+'</text>';
+  }
+  /* Y 轴数字刻度：4 条网格线 + kg 值标签 */
+  var grid='';
+  for(var gi=0; gi<=3; gi++){
+    var gv = lo + (hi-lo)*gi/3;
+    var gy = Y(gv).toFixed(1);
+    grid+='<line x1="'+PL+'" y1="'+gy+'" x2="'+(W-PR)+'" y2="'+gy+'" stroke="#e8eef4" stroke-width="1"/>'+
+      '<text x="'+(PL-6)+'" y="'+(+gy+4)+'" text-anchor="end" font-size="10.5" fill="#94a3b8">'+gv.toFixed(1)+'</text>';
+  }
+  return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+
+    '<line x1="'+PL+'" y1="'+PT+'" x2="'+PL+'" y2="'+(H-PB)+'" stroke="#e2e8f0"/>'+
+    '<line x1="'+PL+'" y1="'+(H-PB)+'" x2="'+(W-PR)+'" y2="'+(H-PB)+'" stroke="#e2e8f0"/>'+
+    grid+
+    refs2+
+    '<polyline points="'+pl+'" fill="none" stroke="#0f6e56" stroke-width="2.2"/>'+ dots+
+    goalSeg+
+    '<text x="'+PL+'" y="'+(H-8)+'" font-size="11" fill="#94a3b8">'+esc(pts[0][0].slice(5))+'</text>'+
+    '<text x="'+(W-PR)+'" y="'+(H-8)+'" text-anchor="end" font-size="11" fill="#94a3b8">'+esc(dmax.slice(5))+'</text>'+
+    '</svg>';
+}
+/* 标准体重：v3 快照带 stdW；老快照按位置目标 BMI 现算（主攻/副攻 19.8 · 接应 19.4 · 二传 20.4 · 自由人 19.0，12-14 岁 ×0.95） */
+function stdWOf(p){
+  if(p.stdW) return p.stdW;
+  if(!p.h) return null;
+  var pos=String(p.p||''), base=19.8;
+  if(/自由人/.test(pos)) base=19.0; else if(/二传/.test(pos)) base=20.4; else if(/接应/.test(pos)) base=19.4;
+  var y=parseInt(p.b,10);
+  if(y>2000 && y<=2020){ var age=new Date().getFullYear()-y; if(age>=12 && age<=14) base*=0.95; }
+  return Math.round(base*Math.pow(p.h/100,2)*10)/10;
+}
+function adviceHTML(p){
+  var STD=stdWOf(p);
+  if(p.w==null || !STD) return '<div class="note" style="border-left-color:#94a3b8;background:#f1f5f9;color:#64748b">缺身高或体重数据 —— 记录一次后自动出减重/增肌建议。</div>';
+  var over=Math.round((p.w-STD)*10)/10;
+  var phv='';
+  var hs=histOf(p).filter(function(r){ return r[1]; });
+  if(hs.length>=2){
+    var a1=hs[hs.length-2], a2=hs[hs.length-1];
+    var dd=(new Date(a2[0])-new Date(a1[0]))/86400000;
+    if(dd>=45){ var v=(a2[1]-a1[1])/dd*365.25;
+      if(v>=6.5) phv='<div class="hint" style="margin-top:4px">⚠ 身高突增期（PHV '+v.toFixed(1)+'cm/年）：力量负荷下调一档，避免大重量脊柱轴向负荷。</div>'; }
+  }
+  if(over>0.1){
+    var weeks=Math.max(1, Math.ceil(over/0.5));
+    return '<div class="note bad">🎯 建议减重：当前 '+p.w+'kg（BMI '+p.bmi+'）→ 位置标准 '+STD+'kg · 需减 <b>'+over.toFixed(1)+'kg</b>（≤0.5kg/周 ≈ <b>'+weeks+' 周</b>，分阶段走）</div>'+
+      '<div class="hint" style="margin-top:4px">蛋白质 1.6-2.0g/kg·d 保肌肉 · 主食减量不减餐 · 避开比赛前 2 周极限减重。'+phv+'</div>';
+  }
+  if(over<-1){
+    return '<div class="note warn">📈 <b>需增肌</b>：当前 '+p.w+'kg 低于位置标准 '+STD+'kg '+Math.abs(over).toFixed(1)+'kg —— 肌肉量不足也是问题，和超重同级对待。</div>'+
+      '<div class="hint" style="margin-top:4px">蛋白质 1.8-2.0g/kg·d · 力量训练后 30 分钟内补蛋白 · 三餐+加餐。'+phv+'</div>';
+  }
+  return '<div class="note good">✓ 体重在位置标准附近（差 '+over.toFixed(1)+'kg），维持现有计划即可。</div>';
+}
+var RET_AT=null;
+function render(){
+  var app=$('app');
+  if(!SNAP){ try{ var last=JSON.parse(localStorage.getItem(LS_SNAP)||'null'); if(last&&last.snap&&last.snap.team&&last.snap.team.length){ SNAP=last.snap; SNAP_SRC='缓存'; } }catch(e){} }
+  if(!SNAP || !SNAP.team || !SNAP.team.length){
+    app.innerHTML='<div class="card"><h2>这个地址还没有数据</h2>'+
+      '<p class="hint">主帅发的<b>「主教练查看链接」末尾带数据</b>（#SNP1.…），用那条链接打开即可；'+
+      '如果只发来一段 <b>SNP1.</b> 开头的码，粘到下面：</p>'+
+      '<textarea id="snapIn" placeholder="粘贴 SNP1. 开头的快照码" style="margin-top:8px"></textarea>'+
+      '<button class="btn pri blk" style="margin-top:8px" onclick="loadSnapCode()">📥 载入快照</button>'+
+      '<p class="hint" style="margin:8px 0 0">载入过后，这台设备直接打开本地址也能看到最后一次的数据。</p></div>';
+    return;
+  }
+  if(SNAP.key) ENT.key=SNAP.key;
+  var team=sortedTeam();
+  var need=0, warn=0, okN=0, na=0;
+  team.forEach(function(p){
+    var al=alOf(p);
+    if(al==='bad') need++; else if(al==='warn'||al==='low') warn++; else if(al==='ok') okN++; else na++;
+  });
+  /* 筛选（与电脑端同款按钮）；默认选中=排序第一=最需要介入的（如陶梓乐） */
+  if(!window.tFilter) window.tFilter='all';
+  var filtered = team.filter(function(p){
+    if(tFilter==='all') return true;
+    if(tFilter==='need') return alOf(p)==='bad';
+    if(tFilter==='watch') return alOf(p)==='warn'||alOf(p)==='low';
+    if(tFilter==='ok') return alOf(p)==='ok';
+    if(tFilter==='no') return alOf(p)==='unknown';
+    return true;
+  });
+  var sel=selName(); var cur=findP(sel) || team[0];
+  if(cur) setSelName(cur.n);
+  var banner = SNAP_SRC==='云端'
+    ? '☁ <b>云端最新数据</b>：'+esc(SNAP.at||'')+' · '+SNAP.team.length+' 名队员 —— 主帅上传后这里自动就是最新。'
+    : SNAP_SRC==='缓存'
+    ? '📸 <b>上次打开时的快照</b>：'+esc(SNAP.at||'')+' —— <b>可能不是最新</b>，打开带 ?key= 的共享短链即拉最新。'
+    : '📸 数据快照：<b>'+esc(SNAP.at)+'</b> · '+SNAP.team.length+' 名队员。';
+  function chip(key,label,n){
+    return '<button class="btn sm'+(tFilter===key?' pri':'')+'" onclick="tFilter=\''+key+'\';render()">'+label+' '+n+'</button>';
+  }
+  var rows=filtered.map(function(p){
+    return '<tbody class="tr-click'+(cur&&cur.n===p.n?' sel':'')+'" onclick="setSelName(\''+esc(p.n)+'\');render()">'+
+      '<tr><td><b>'+esc(p.n)+'</b></td><td>'+esc(bdOf(p))+'</td><td>'+esc(p.p||'—')+'</td>'+
+      '<td class="num">'+(p.h||'—')+'</td><td class="num">'+(p.w||'—')+'</td><td class="num">'+(p.bmi||'—')+'</td>'+
+      '<td>'+statusTag(p)+'</td><td class="num">'+scoreTag(p)+'</td></tr></tbody>';
+  }).join('');
+  var wk=weekMon();
+  var unsent=ENT.recs.filter(function(r){ return !r.sent; });
+  var hasRet=!!retKey();
+  app.innerHTML=
+    '<div class="card"><p class="hint" style="margin:0">'+banner+'</p></div>'+
+    playerCard(cur)+
+    '<div class="stats">'+
+      '<div class="stat b"><div class="n">'+need+'</div><div class="l">需介入</div></div>'+
+      '<div class="stat a"><div class="n">'+warn+'</div><div class="l">需关注（含需增肌）</div></div>'+
+      '<div class="stat g"><div class="n">'+okN+'</div><div class="l">体重合理</div></div>'+
+      '<div class="stat n"><div class="n">'+na+'</div><div class="l">待录入数据</div></div>'+
+    '</div>'+
+    '<div class="card"><h2>📊 团队 BMI 一览（按紧迫度从高到低）</h2>'+
+      '<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">'+
+        chip('all','全部',team.length)+chip('need','🔴 需介入',need)+chip('watch','🟡 需关注',warn)+
+        chip('ok','🟢 合理',okN)+chip('no','⚪ 待录入',na)+
+      '</div>'+
+      '<div class="tblw"><table><thead><tr><th>姓名</th><th>出生日期</th><th>位置</th><th class="num">身高</th><th class="num">体重</th>'+
+      '<th class="num">BMI</th><th>状态</th><th class="num">分</th></tr></thead>'+rows+'</table></div>'+
+      '<div class="hint" style="margin-top:6px">评分与主帅端同一套算法（BMI 距目标 55% + 位置 15% + 趋势 30%，高分=合理）。'+
+      '分最低=最需要介入，排最前；「需增肌」和超重一样算问题、一样参与评分。点任意一行看该队员的趋势图与建议。</div></div>'+
+    renderFeedbackCard()+
+    '<div class="card"><h2>✏️ 代录身高 / 体重 <span class="tag '+(hasRet?'t-ok':'t-un')+'" style="margin-left:6px">'+(hasRet?(RET_AT?('已自动回传 '+RET_AT):'保存后自动回传'):'需回传码兜底')+'</span></h2>'+
+      '<div class="frow">'+
+        '<div class="fld"><label>队员</label><select id="cName">'+team.map(function(p){ return '<option'+(cur&&cur.n===p.n?' selected':'')+'>'+esc(p.n)+'</option>'; }).join('')+'</select></div>'+
+        '<div class="fld"><label>日期</label><input id="cDate" type="date"></div>'+
+        '<div class="fld"><label>身高 cm（选填）</label><input id="cH" type="number" step="0.5" inputmode="decimal" placeholder="沿用"></div>'+
+        '<div class="fld"><label>体重 kg</label><input id="cW" type="number" step="0.1" inputmode="decimal" placeholder="如 62.5"></div>'+
+      '</div>'+
+      '<button class="btn pri blk" onclick="addRec()">💾 保存并自动回传</button>'+
+      '<div id="myRecs" style="margin-top:10px"></div>'+
+      (hasRet?'':'<div class="hint" style="margin-top:6px">这条链接没带云端 key，用下方回传码兜底。</div>')+'</div>'+
+    (hasRet
+      ? '<div class="card"><h2>📤 自动回传</h2><p class="hint" style="margin:0 0 8px">代录保存后<b>自动上传云端</b>，主帅在 YouthFit「身体监测 → 📥 拉取主教练回传」一键合并（无需回传码）；每周目标同样自动同步。</p>'+
+        '<button class="btn blk" onclick="pushRet(false)">↻ 立即回传全部（代录 '+ENT.recs.length+' 条 · 截止目标 '+Object.keys(G).length+' 人）</button></div>'
+      : '<div class="card"><h2>📤 回传给主帅（码兜底）</h2><button class="btn pri blk" onclick="genCode(true)">生成回传码（全部）</button>'+
+        '<div id="codeBox" style="display:none;margin-top:10px"><textarea id="codeOut" readonly onclick="this.select()"></textarea>'+
+        '<button class="btn pri blk" style="margin-top:8px" onclick="copyCode()">📋 复制回传码</button></div></div>');
+  $('cDate').value=todayStr();
+  renderMyRecs();
+}
+function playerCard(p){
+  if(!p) return '';
+  var wtc=curWeekTarget(p);
+  var wtHist=(p.wt||[]).slice().reverse().map(function(t){
+    var inWeek=histOf(p).filter(function(r){ return r[0]>=t[0] && r[0]<=addDaysStr(t[0],6) && r[2]; });
+    var actual=inWeek.length?inWeek[inWeek.length-1][2]:null;
+    return '<div class="rec"><b>'+esc(t[0])+' 那周</b><span>目标 '+t[1]+'kg</span><span class="sp"></span>'+verdict(t[1], actual)+'</div>'; }).join('');
+  var recs=histOf(p).slice().reverse().map(function(r){
+    return '<div class="rec"><b>'+esc(r[0])+'</b><span>'+(r[1]?r[1]+'cm · ':'')+r[2]+'kg</span></div>'; }).join('');
+  /* 图表是主视图：紧跟姓名标题，先出图，其余内容都在图后面 */
+  return '<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">'+
+      '<h2 style="margin:0">👤 '+esc(p.n)+' <span class="hint">· '+esc(p.p||'—')+'</span></h2>'+
+      '<span>'+stTag(p.st)+' '+scoreTag(p)+'</span></div>'+
+    '<div style="margin-top:10px"><h2 style="margin:0 0 6px">📉 体重趋势</h2>'+trendSVG(p)+'</div>'+
+    '<div class="stats" style="margin-top:10px">'+
+      '<div class="stat"><div class="n">'+(p.h||'—')+'</div><div class="l">身高 cm</div></div>'+
+      '<div class="stat"><div class="n">'+(p.w||'—')+'</div><div class="l">体重 kg</div></div>'+
+      '<div class="stat '+(alOf(p)==='bad'?'b':(alOf(p)==='warn'||alOf(p)==='low'?'a':(alOf(p)==='ok'?'g':'n')))+'"><div class="n">'+(p.bmi||'—')+'</div><div class="l">BMI</div></div>'+
+      '<div class="stat '+((wtc!=null&&p.w!=null)?(Math.abs(p.w-wtc)<=0.5?'g':'b'):'n')+'"><div class="n">'+(wtc!=null?verdictTxt(wtc,p.w):'—')+'</div><div class="l">本周目标对比</div></div>'+
+    '</div>'+
+    adviceHTML(p)+
+    '<div class="sep"></div><h2>🎯 每周目标</h2>'+
+    '<div class="frow" style="max-width:520px">'+
+      '<div class="fld"><label>截止目标 kg（到日期降到/增到）</label><input id="gT" type="number" step="0.1" inputmode="decimal" placeholder="'+(goalOf(p)?goalOf(p).t:'如 57.6')+'"></div>'+
+      '<div class="fld"><label>截止日期</label><input id="gBy" type="date" value="'+(goalOf(p)?goalOf(p).by:'')+'"></div>'+
+      '<div class="fld" style="align-self:end"><button class="btn blk" onclick="saveGoal(\''+esc(p.n)+'\')">🗓 设截止目标并同步</button></div>'+
+    '</div>'+
+    goalLine(p)+
+    ((p.wt&&p.wt.length)?('<details><summary>逐周目标历史（主帅设，'+p.wt.length+' 周）</summary>'+wtHist+'</details>'):'<p class="hint">主帅还没设每周目标（每周目标在主帅的 YouthFit 里设，这里只看）。</p>')+
+    '<div class="sep"></div><details><summary>📋 历史记录（'+histOf(p).length+' 条）</summary>'+((recs)?recs:'<p class="hint">暂无</p>')+'</details>'+
+    '</div>';
+}
+function saveGoal(n){
+  var t=parseFloat($('gT') ? $('gT').value : ''), by=$('gBy') ? $('gBy').value : '';
+  if(!(t>25 && t<200)){ flash('请填写截止目标 kg（25-200）', true); return; }
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(by)){ flash('请选择截止日期', true); return; }
+  var p=findP(n);
+  G[n]={t:Math.round(t*10)/10, by:by}; persistG();
+  pushPayload({goals:[{n:n, b:((p||{}).b||''), t:Math.round(t*10)/10, by:by}]}, false);
+  render();
+  flash('✅ 截止目标已设（'+by+' 前 '+Math.round(t*10)/10+'kg），正在同步给主帅…', false);
+}
+function verdictTxt(target, actual){
+  if(target==null) return '—';
+  if(actual==null) return '未称重';
+  var diff=Math.round((actual-target)*10)/10;
+  return (diff>0?'+':'')+diff;
+}
+/* 训练反馈卡：分位置 → 得分手段权重(0-3) + 17 项画像目标值（可改）→ 保存即回传 */
+function renderFeedbackCard(){
+  if(!SNAP.prof){ return '<div class="card"><h2>📋 训练反馈（达标画像 + 得分手段）</h2><p class="hint">主帅的快照还是旧版（没带画像数据）—— 让他在电脑上打开一次「身体监测」页（会自动上传），刷新本页即可填写。</p></div>'; }
+  var groups=fbGroups();
+  var posList=FB_POS.filter(function(pos){ return groups[pos]; }).concat(
+    Object.keys(groups).filter(function(pos){ return FB_POS.indexOf(pos)<0; }));
+  if(!posList.length){ return '<div class="card"><h2>📋 训练反馈（达标画像 + 得分手段）</h2><p class="hint">快照里没有 2013/2014 出生或王梓昊的队员。</p></div>'; }
+  var cards=posList.map(function(pos){
+    var members=groups[pos].map(function(p){ return '<span class="pill">'+esc(p.n)+'</span>'; }).join(' ');
+    var saved=FB[pos]?'<span class="tag t-ok" style="margin-left:6px">已反馈'+(FB[pos].at?(' '+FB[pos].at):'')+'</span>':'';
+    var meanRows=FB_MEANS.map(function(m){
+      var v=fbMeanOf(pos,m.k);
+      return '<div class="rec"><div style="flex:1"><b>'+esc(m.l)+'</b> <span class="hint">'+esc(m.d)+'</span></div>'+
+        '<select id="fbm_'+pos+'_'+m.k+'" style="width:74px">'+[0,1,2,3].map(function(w){ return '<option value="'+w+'"'+(v===w?' selected':'')+'>'+('权重 '+w)+'</option>'; }).join('')+'</select></div>';
+    }).join('');
+    var profRows=FB_META.map(function(m){
+      var v=fbProfOf(pos,m.k);
+      return '<tr><td>'+esc(m.l)+' <span class="hint">'+m.u+(m.gte?' · ≥目标':' · 越低越好')+'</span></td>'+
+        '<td class="num" style="width:110px"><input id="fbp_'+pos+'_'+m.k+'" type="number" step="0.05" inputmode="decimal" value="'+(v!=null?v:'')+'" style="width:96px"></td></tr>';
+    }).join('');
+    return '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:13.5px;font-weight:700">🏐 '+esc(pos)+
+      ' <span class="hint" style="font-weight:400">（'+groups[pos].length+' 人：'+esc(groups[pos].map(function(x){return x.n;}).join('、'))+'）</span>'+saved+'</summary>'+
+      '<div class="sep"></div><b style="font-size:13px">① 关键得分手段（该位置靠什么得分，权重 0-3）</b>'+meanRows+
+      '<div class="sep"></div><b style="font-size:13px">② 达标画像目标值（17 项，觉得不合理直接改）</b>'+
+      '<div class="tblw"><table>'+profRows+'</table></div>'+
+      '<button class="btn pri blk" style="margin-top:10px" onclick="saveFb(\''+esc(pos)+'\')">💾 保存「'+esc(pos)+'」反馈并回传</button>'+
+      '</details>';
+  }).join('');
+  var pending=Object.keys(FB).length;
+  return '<div class="card"><h2>📋 训练反馈（达标画像 + 得分手段）<span class="tag '+(pending?'t-ok':'t-na')+'" style="margin-left:6px">'+(pending?('已填 '+pending+' 个位置'):'未填')+'</span></h2>'+
+    '<p class="hint" style="margin:0 0 4px">反馈对象：2013 / 2014 出生 + 王梓昊。按位置填两件事：① 这个位置靠什么得分（权重 0-3）；② 17 项达标目标值合不合理（可直接改）。保存即自动回传给主帅，合并进他的达标画像与周期权重。</p>'+
+    cards+
+    (pending?'<button class="btn blk" style="margin-top:10px" onclick="pushRet(false)">↻ 立即回传全部反馈</button>':'')+
+    '</div>';
+}
+function saveFb(pos){
+  var means={}, prof={}, any=false;
+  FB_MEANS.forEach(function(m){
+    var el=document.getElementById('fbm_'+pos+'_'+m.k); if(!el) return;
+    var v=parseInt(el.value,10); if(!(v>=0)) return;
+    means[m.k]=v; any=true;
+  });
+  FB_META.forEach(function(m){
+    var el=document.getElementById('fbp_'+pos+'_'+m.k); if(!el) return;
+    var v=parseFloat(el.value); if(isNaN(v)) return;
+    prof[m.k]=v; any=true;
+  });
+  if(!any){ flash('这个位置没有可保存的内容', true); return; }
+  FB[pos]={means:means, prof:prof, at:todayStr()}; persistFb();
+  pushPayload({fb:{ts:Date.now(), means:(function(){ var o={}; o[pos]=means; return o; })(), prof:(function(){ var o={}; o[pos]=prof; return o; })()}}, false);
+  render();
+  flash('✅ 「'+pos+'」反馈已保存并回传给主帅', false);
+}
+function allLocalFb(){
+  var out={ts:Date.now(), means:{}, prof:{}};
+  Object.keys(FB).forEach(function(pos){
+    if(FB[pos].means) out.means[pos]=FB[pos].means;
+    if(FB[pos].prof) out.prof[pos]=FB[pos].prof;
+  });
+  return out;
+}
+function renderMyRecs(){
+  var list=ENT.recs.slice(-10).reverse();
+  $('myRecs').innerHTML = list.length ? list.map(function(r,i){
+    return '<div class="rec"><b>'+esc(r.n)+'</b><span>'+esc(r.d)+' · '+(r.h?r.h+'cm · ':'')+r.w+'kg</span><span class="sp"></span>'+
+      (r.sent?'<span class="tag t-ok">已回传</span>':'<span class="tag t-un">未回传</span>')+
+      '<button onclick="delRec('+(ENT.recs.length-1-i)+')">🗑</button></div>'; }).join('')
+    : '<p class="hint" style="margin:4px 0">还没代录过 —— 上面保存一条试试。</p>';
+}
+function addRec(){
+  var n=$('cName').value, d=$('cDate').value||todayStr();
+  var w=parseFloat($('cW').value);
+  if(!(w>20 && w<200)){ flash('请填写体重 kg', true); return; }
+  var hv=parseFloat($('cH').value);
+  var h=(hv>80&&hv<250)?Math.round(hv*10)/10:lastHFor(n);
+  var ex=ENT.recs.find(function(r){ return r.n===n && r.d===d; });
+  if(ex){ ex.h=h||ex.h; ex.w=w; ex.sent=0; } else ENT.recs.push({n:n, b:((findP(n)||{}).b||''), d:d, h:h, w:w, sent:0});
+  persistEnt(); render();
+  if(retKey()) pushRet(false); else flash('✅ 已保存（本链接无云端 key，用下方回传码兜底）', false);
+}
+function delRec(i){ ENT.recs.splice(i,1); persistEnt(); render(); }
+/* 上传回传负载：recs=代录记录，goals=截止目标（主帅端都会合并） */
+async function pushPayload(extra, silent){
+  var rk=retKey();
+  if(!rk){ if(!silent) flash('这条链接没有云端 key，用回传码兜底', true); return false; }
+  var payload={v:2, at:todayStr(), recs:ENT.recs, goals:(extra&&extra.goals)||allLocalGoals(), fb:(extra&&extra.fb)||((function(){ var k=Object.keys(FB); return k.length?allLocalFb():null; })())};
+  try{
+    var body='key='+encodeURIComponent(rk)+'&value='+encodeURIComponent(JSON.stringify(payload));
+    var r=await fetch('https://textdb.online/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+    var j=await r.json();
+    if(j.status===1){
+      ENT.recs.forEach(function(x){ x.sent=1; }); persistEnt(); RET_AT=todayStr(); render();
+      if(!silent) flash('✅ 已回传给主帅（代录 '+payload.recs.length+' 条 · 截止目标 '+payload.goals.length+' 条）—— 他打开身体监测页自动合并', false);
+      return true;
+    }
+    if(!silent) flash('回传失败：'+JSON.stringify(j).slice(0,80), true);
+  }catch(e){ if(!silent) flash('回传失败：'+e, true); }
+  return false;
+}
+/* 全部本机设过的目标（用于「立即回传」兜底，主帅端按指纹去重不会重复刷） */
+function allLocalGoals(){
+  var out=[];
+  Object.keys(G).forEach(function(n){
+    var p=findP(n), g=G[n];
+    if(g && g.t && g.by) out.push({n:n, b:((p||{}).b||''), t:g.t, by:g.by});
+  });
+  return out;
+}
+async function pushRet(silent){ return pushPayload(null, silent); }
+function genCode(all){
+  var list=ENT.recs.filter(function(r){ return all || !r.sent; });
+  if(!list.length){ flash('没有可回传的新记录', true); return; }
+  var byP={};
+  list.forEach(function(r){ var k=r.n+'|'+(r.b||''); (byP[k]||(byP[k]={n:r.n,b:r.b,rs:[]})).rs.push([r.d, r.h||null, r.w]); });
+  var text=Object.keys(byP).map(function(k){
+    var g=byP[k]; return 'YFB1.'+b64encUtf8(JSON.stringify({v:1, n:g.n, b:g.b, r:g.rs}));
+  }).join('\n');
+  if(!all){ list.forEach(function(r){ r.sent=1; }); persistEnt(); }
+  render();
+  $('codeOut').value=text; $('codeBox').style.display='block';
+  flash('✅ 码已生成（'+list.length+' 条）—— 点下方复制发给主帅', false);
+}
+function copyCode(){
+  var t=$('codeOut'); t.select(); t.setSelectionRange(0,99999);
+  var ok=false; try{ ok=document.execCommand('copy'); }catch(e){}
+  if(!ok && navigator.clipboard){ navigator.clipboard.writeText(t.value); ok=true; }
+  flash(ok?'✅ 已复制 —— 微信发给主帅':'请长按文本框全选复制', !ok);
+}
+function loadSnapCode(){
+  var t=$('snapIn').value.trim();
+  var m=t.match(/SNP1\.([A-Za-z0-9+/=]+)/);
+  if(!m){ flash('请粘贴 SNP1. 开头的快照码（或直接打开主帅发的链接）', true); return; }
+  try{ SNAP=JSON.parse(b64decUtf8(m[1])); }catch(e){ flash('码解不开 —— 确认从主帅消息里完整复制', true); return; }
+  if(!SNAP || !SNAP.team || !SNAP.team.length){ flash('码里没有队员数据', true); return; }
+  SNAP_SRC='粘贴';
+  try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
+  render();
+  flash('✅ 快照已载入（'+SNAP.team.length+' 名队员）', false);
+}
+function flash(msg,isErr){
+  var el=$('flashBar');
+  if(!el){ el=document.createElement('div'); el.id='flashBar';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:22px;max-width:86vw;padding:10px 16px;border-radius:10px;font-size:14px;font-weight:700;color:#fff;background:#0f6e56;box-shadow:0 4px 14px rgba(0,0,0,.25);z-index:9';
+    document.body.appendChild(el); }
+  el.style.background=isErr?'#A32D2D':'#0f6e56';
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(flash._t); flash._t=setTimeout(function(){ el.style.display='none'; },2200);
+}
+function fetchCloud(k){
+  var app=$('app'); if(app) app.innerHTML='<div class="card"><p class="hint">正在从云端读取最新数据…</p></div>';
+  fetch('https://textdb.online/'+k).then(function(r){ return r.text(); }).then(function(t){
+    if(!t){ flash('云端还没有数据 —— 主帅在电脑上打开「身体监测」会自动上传', true); render(); return; }
+    try{ SNAP=JSON.parse(t); }catch(e){ flash('云端数据解析失败', true); render(); return; }
+    SNAP_SRC='云端';
+    if(SNAP.key) rememberKey(SNAP.key);
+    try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
+    render();
+  }).catch(function(e){ flash('云端读取失败：'+e, true); render(); });
+}
+render();
+var k0 = KEY_PARAM || storedKey();
+/* 带 ?key= → 必拉（云端权威，缓存只是兜底）；裸地址 → 有记住的 key 且当前不是带数据的链接 → 拉最新覆盖缓存 */
+if(k0 && (KEY_PARAM || !SNAP || SNAP_SRC!=='链接')) fetchCloud(k0);
+
+/* 自检钩子（?__probe=1；正常使用不触发） */
+if(location.search.indexOf('__probe')>=0){
+  (function(){
+    var out=[];
+    function ck(n,c,e){ out.push((c?'PASS ':'FAIL ')+n+(e?(' | '+e):'')); }
+    function wait(ms){ return new Promise(function(r){ setTimeout(r,ms); }); }
+    (async function(){
+      try{
+        localStorage.removeItem(LS_SNAP);
+        /* 快照 v3：带评分 sc/al —— 分低=严重。肥胖乙 52 分 < 需增肌丁 61 分 < 超重丙 74 分 < 正常甲 92 分 */
+        SNAP={v:3, at:'2026-09-11', key:'', team:[
+          {n:'正常甲', b:'2012', p:'主攻', h:178, w:70, bmi:22.1, st:'正常', lvl:'ok',  sc:92, al:'ok',  sl:'合理', stdW:66,  hist:[['2026-09-01',178,70]], wt:[]},
+          {n:'肥胖乙', b:'2014', p:'主攻', h:175, w:82, bmi:26.8, st:'肥胖', lvl:'bad', sc:52, al:'bad', sl:'需介入', stdW:57.6, hist:[['2026-09-01',175,82],['2026-09-08',175,81]], wt:[['2026-09-07',78.5]]},
+          {n:'超重丙', b:'2013', p:'副攻', h:172, w:66, bmi:22.3, st:'超重', lvl:'warn',sc:74, al:'warn', sl:'关注', stdW:60,  hist:[['2026-09-01',172,66]], wt:[]},
+          {n:'需增肌丁', b:'2014', p:'接应', h:170, w:45, bmi:15.6, st:'需增肌', lvl:'low', sc:61, al:'low', sl:'需介入', stdW:52, hist:[['2026-09-01',170,45]], wt:[]}
+        ]}; SNAP_SRC=''; render();
+        var first=document.querySelector('#app tbody.tr-click b').textContent;
+        ck('S1 排序=等级优先+同级分数从低到高（肥胖乙52 第一）', first==='肥胖乙', 'first='+first);
+        var order=Array.prototype.map.call(document.querySelectorAll('#app tbody.tr-click b'), function(x){ return x.textContent; }).join(',');
+        ck('S1b 顺序=肥胖乙(52)→需增肌丁(61)→超重丙(74)→正常甲(92)',
+           order==='肥胖乙,需增肌丁,超重丙,正常甲', order);
+        ck('S2 团队表带「分」列且用色标（52 红）', /<span class="tag t-bad">52<\/span>/.test(document.getElementById('app').innerHTML) && /t-ok">92</.test(document.getElementById('app').innerHTML));
+        ck('S3 状态显示「需增肌」不再是「偏瘦」', /需增肌/.test(document.getElementById('app').innerHTML) && document.getElementById('app').innerHTML.indexOf('偏瘦')<0);
+        ck('S4 图表是详情卡第一屏（标题后紧跟趋势图）', (function(){
+          var h=document.getElementById('app').innerHTML;
+          return h.indexOf('体重趋势')>=0 && h.indexOf('体重趋势')<h.indexOf('身高 cm'); })());
+        setSelName('正常甲'); render();
+        ck('S5 趋势图：不足 2 次称重给提示', /还画不了趋势/.test(document.getElementById('app').innerHTML));
+        setSelName('肥胖乙'); render();
+        ck('S6 趋势图 SVG（含位置标准与本周目标虚线）', /<svg class="chart"/.test(document.getElementById('app').innerHTML) && /位置标准 57\.6kg/.test(document.getElementById('app').innerHTML) && /本周目标 78\.5kg/.test(document.getElementById('app').innerHTML));
+        /* 每周目标设置已移除（与截止目标重复）——每周目标只在主帅端设，教练端只读历史 */
+        SNAP.key='yfbody-selftest'+String(Date.now()).slice(-6);
+        var KEYSAVE=SNAP.key;                  /* 后面的 v1 兜底测试会覆盖快照，留住 key 给 S14/S9 用 */
+        ck('S7 教练端不再设每周目标（输入框与按钮已移除）', !document.getElementById('wtSet'));
+        ck('S8 逐周目标历史仍显示（只读）', /逐周目标历史|主帅还没设每周目标/.test(document.getElementById('app').innerHTML));
+        /* 代录自动回传仍走同一负载（recs） */
+        ENT.recs=[{n:'肥胖乙', b:'2014', d:'2026-09-11', h:175, w:80.5, sent:0}];
+        persistEnt();
+        /* ── v1 旧快照兜底（手机上那份老缓存就是这种：无 al/sc/stdW/lvl）── */
+        SNAP={v:1, at:'2026-09-11', team:[
+          {n:'旧数据甲', b:'2014', p:'主攻', h:175, w:82, bmi:26.8, st:'肥胖',
+           recs:[['2026-09-01',175,84],['2026-09-11',175,81]]}
+        ]}; SNAP_SRC=''; render();
+        var a1=document.getElementById('app').innerHTML;
+        ck('S10 旧快照状态/统计兜底（肥胖→需减重，需介入 1）',
+           /需减重/.test(a1) && /<div class="n">1<\/div><div class="l">需介入<\/div>/.test(a1));
+        ck('S11 旧快照建议兜底（stdW 现算：175cm 主攻 12 岁 → 57.6）', /建议减重/.test(a1) && /57\.6/.test(a1));
+        ck('S12 趋势图带 Y 轴数字刻度（4 条网格线 + kg 标签）',
+           (a1.match(/stroke="#e8eef4"/g)||[]).length>=4 && /font-size="10\.5"/.test(a1));
+        rememberKey('yfbody-selfkey123');
+        ck('S13 记住云端 key（裸地址据此拉最新）', storedKey()==='yfbody-selfkey123');
+        try{ localStorage.removeItem(LS_KEY); }catch(e){}
+        /* ── 截止目标：设 → 上云 goals → 可行性文案（v1 兜底测试覆盖了快照，先恢复含肥胖乙的快照）── */
+        SNAP={v:3, at:'2026-09-11', key:KEYSAVE, team:[
+          {n:'肥胖乙', b:'2014', p:'主攻', h:175, w:81, bmi:26.4, st:'肥胖', lvl:'bad', sc:58, al:'bad', sl:'需介入', stdW:57.6,
+           hist:[['2026-09-01',175,84],['2026-09-11',175,81]], wt:[]}
+        ]}; SNAP_SRC=''; render();
+        setSelName('肥胖乙'); render();
+        document.getElementById('gT').value='57.6';
+        document.getElementById('gBy').value='2026-12-31';
+        SNAP.key=KEYSAVE;
+        saveGoal('肥胖乙');
+        await wait(700);
+        var t3=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var o3=t3?JSON.parse(t3):null;
+        ck('S14 设截止目标 → 随 <key>-ret 上云（goals 字段）',
+           o3 && o3.goals && o3.goals.length===1 && o3.goals[0].n==='肥胖乙' && o3.goals[0].t===57.6 && o3.goals[0].by==='2026-12-31',
+           t3?t3.slice(0,110):'空');
+        var gl=goalLine(findP('肥胖乙'));
+        ck('S15 截止目标可行性行（还差/kg每周/安全速率）',
+           /截止目标/.test(gl) && /还差 <b>23\.4kg<\/b>/.test(gl) && /安全速率/.test(gl), gl.slice(0,110));
+        var svg2=document.getElementById('app').innerHTML;
+        ck('S16 计划线上图（截止目标 57.6kg 端点 + 日期刻度延到 12-31）',
+           /截止目标 57\.6kg · 12-31/.test(svg2) && /stroke-dasharray="3 4"/.test(svg2) && /12-31/.test(svg2));
+        /* ── 训练反馈表单：分位置（2013/14 + 王梓昊）→ 手段权重 + 画像目标值 → 上云 fb ── */
+        SNAP.prof={'主攻':{cmj:52,sj:46},'副攻':{cmj:50,sj:44}};
+        SNAP.means={spike:2};
+        SNAP.team=[
+          {n:'陶梓乐', b:'2014', p:'主攻/排球', h:175, w:81, bmi:26.4, st:'肥胖', lvl:'bad', sc:58, al:'bad', sl:'需介入', stdW:57.6, hist:[['2026-09-01',175,84],['2026-09-11',175,81]], wt:[]},
+          {n:'王梓昊', b:'2012', p:'主攻/排球', h:178, w:70, bmi:22.1, st:'正常', lvl:'ok', sc:92, al:'ok', sl:'合理', stdW:66, hist:[['2026-09-01',178,70]], wt:[]},
+          {n:'超龄丙', b:'2011', p:'接应/排球', h:180, w:75, bmi:23.1, st:'正常', lvl:'ok', sc:90, al:'ok', sl:'合理', stdW:60, hist:[['2026-09-01',180,75]], wt:[]}
+        ]; SNAP_SRC=''; FB={}; render();
+        var fbHtml=document.getElementById('app').innerHTML;
+        ck('S17 反馈卡渲染（主攻组=陶梓乐+王梓昊；无接应组；17 项画像 + 6 手段）',
+           /（2 人：陶梓乐、王梓昊）/.test(fbHtml) && (fbHtml.match(/fbm_主攻_/g)||[]).length===6 &&
+           (fbHtml.match(/fbp_主攻_/g)||[]).length===17 && (fbHtml.match(/fbm_接应_/g)||[]).length===0,
+           '主攻表单='+(fbHtml.match(/fbp_主攻_/g)||[]).length+' 项');
+        document.getElementById('fbp_主攻_cmj').value='55';
+        document.getElementById('fbm_主攻_spike').value='3';
+        SNAP.key=KEYSAVE;
+        saveFb('主攻');
+        await wait(700);
+        var t4=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var o4=t4?JSON.parse(t4):null;
+        ck('S18 保存反馈 → 随 <key>-ret 上云（fb 字段：手段+画像）',
+           o4 && o4.fb && o4.fb.means && o4.fb.means['主攻'] && o4.fb.means['主攻'].spike===3 &&
+           o4.fb.prof && o4.fb.prof['主攻'] && o4.fb.prof['主攻'].cmj===55,
+           t4?t4.slice(0,120):'空');
+
+        SNAP.key=KEYSAVE;                      /* 恢复 key 再测代录回传 */
+        ENT.recs=[{n:'肥胖乙', b:'2014', d:'2026-09-11', h:175, w:80.5, sent:0}];
+        persistEnt();
+        var okRet=await pushRet(true);
+        await wait(600);
+        var t2=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var o2=t2?JSON.parse(t2):null;
+        ck('S9 代录自动回传（recs 字段仍在）', okRet && o2 && o2.recs.length===1 && o2.recs[0].w===80.5, t2?t2.slice(0,80):'空');
+      }catch(e){ out.push('ERR '+String(e&&e.stack||e).slice(0,160)); }
+      var pre=document.createElement('pre'); pre.id='probeOut'; pre.textContent=out.join('\n');
+      document.body.appendChild(pre);
+      document.title = out.every(function(l){ return l.indexOf('FAIL')<0 && l.indexOf('ERR')<0; }) ? 'PROBE_PASS' : 'PROBE_FAIL';
+    })();
+  })();
+}
+</script>
+</body>
+</html>
