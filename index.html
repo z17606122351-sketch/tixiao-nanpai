@@ -253,8 +253,9 @@ function sortedTeam(){
   });
   return t;
 }
-function selName(){ try{ return localStorage.getItem('yf_coach_sel')||''; }catch(e){ return ''; } }
-function setSelName(n){ try{ localStorage.setItem('yf_coach_sel', n); }catch(e){} }
+/* 选中人：会话内记住（sessionStorage）—— 每次新打开链接默认回到 陶梓乐 */
+function selName(){ try{ return sessionStorage.getItem('yf_coach_sel')||''; }catch(e){ return ''; } }
+function setSelName(n){ try{ sessionStorage.setItem('yf_coach_sel', n); }catch(e){} }
 /* 体重趋势 SVG：实线=体重，虚线=位置标准体重 / 本周目标；
    设了截止目标 → 再画一条「计划线」：从当前体重连到截止日期的目标点，图上直接看到目标与期限 —— 详情卡的主视图 */
 function trendSVG(p){
@@ -365,7 +366,7 @@ function render(){
     var al=alOf(p);
     if(al==='bad') need++; else if(al==='warn'||al==='low') warn++; else if(al==='ok') okN++; else na++;
   });
-  /* 筛选（与电脑端同款按钮）；默认选中=排序第一=最需要介入的（如陶梓乐） */
+  /* 筛选（与电脑端同款按钮）；默认选中=陶梓乐，没这人回落排序第一（最需要介入的） */
   if(!window.tFilter) window.tFilter='all';
   var filtered = team.filter(function(p){
     if(tFilter==='all') return true;
@@ -375,7 +376,8 @@ function render(){
     if(tFilter==='no') return alOf(p)==='unknown';
     return true;
   });
-  var sel=selName(); var cur=findP(sel) || team[0];
+  /* 默认选中 陶梓乐（主教练最关注）；没这人再回落到评分最低者 */
+  var sel=selName(); var cur=findP(sel) || findP('陶梓乐') || team[0];
   if(cur) setSelName(cur.n);
   var banner = SNAP_SRC==='云端'
     ? '☁ <b>云端最新数据</b>：'+esc(SNAP.at||'')+' · '+SNAP.team.length+' 名队员 —— 主帅上传后这里自动就是最新。'
