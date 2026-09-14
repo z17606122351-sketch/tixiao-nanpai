@@ -126,6 +126,23 @@ function adj(athId, name, dw, dr){
   });
   LOG[athId][name]=out.join(' '); saveLocal(); render();
 }
+/* 组数快捷增减：+1 = 复制最后一组；−1 = 删最后一组（最少保留 1 组） */
+function adjSets(athId, name, delta){
+  var it=byId(athId), sets=parseTok(tokOf(athId,name));
+  var e=exOf(it,name);
+  if(!sets.length && e && e.refW!=null){          /* 还没点名就从计划生成 */
+    var reps=planNum(e.reps)||5, n=parseInt(String(e.sets),10)||3, arr=[];
+    for(var k=0;k<n;k++) arr.push(e.refW+'x'+reps);
+    sets=arr.map(function(t){ return parseTok(t)[0]; });
+  }
+  if(!sets.length) return;
+  if(delta>0){ var last=sets[sets.length-1]; sets.push([last[0], last[1]]); }
+  else if(delta<0){ if(sets.length<=1){ toast('至少留 1 组'); return; } sets.pop(); }
+  LOG[athId]=LOG[athId]||{};
+  LOG[athId][name]=sets.map(function(x){ return x[0]+'x'+x[1]; }).join(' ');
+  saveLocal(); render();
+  toast(athId ? (byId(athId).name+' '+name+' → '+sets.length+' 组') : '', 1200);
+}
 function setTok(athId, name, v){ LOG[athId]=LOG[athId]||{}; if(v.trim()) LOG[athId][name]=v.trim(); else delete LOG[athId][name]; saveLocal(); render(); }
 function allDone(){
   var n=0;
@@ -151,6 +168,8 @@ function render(){
     var detail = done? ('<span class="pr">已记 '+(sets.length?sets.length:0)+' 组'+(best?(' · 估算 PR '+best+'kg'):'')+'</span>')
                      : '<span class="pr" style="color:var(--mut)">未录 = 按计划完成</span>';
     var tune = done? ('<div class="tune">'+
+        '<button onclick="adjSets(\''+it.athId+'\',\''+esc(curEx)+'\',1)">＋1 组</button>'+
+        '<button onclick="adjSets(\''+it.athId+'\',\''+esc(curEx)+'\',-1)">－1 组</button>'+
         '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',2.5,0)">重+2.5</button>'+
         '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',-2.5,0)">重−2.5</button>'+
         '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',0,1)">次+1</button>'+
@@ -169,7 +188,7 @@ function render(){
   var doneAll=DAY.items.filter(function(it){ return exOf(it,curEx) && isDone(it,curEx); }).length;
   var totAll=DAY.items.filter(function(it){ return exOf(it,curEx); }).length;
   $('prog').textContent=curEx+'：'+doneAll+'/'+totAll+' 人已录';
-  $('hint').textContent='点「完成」= 按他的计划重量×次数记满全部组；要改就用 重±2.5 / 次±1 或展开精修。';
+  $('hint').textContent='点「完成」= 按计划记满全部组；少做了就点「－1 组」，重量/次数用 ± 调，或展开精修。';
   var total=0, hit=0;
   DAY.items.forEach(function(it){ exList().forEach(function(n){ if(exOf(it,n)){ total++; if(isDone(it,n)) hit++; } }); });
   $('st').textContent=hit+'/'+total+' 格';
