@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>即训即录 · 上海市体校男排</title>
+<style>
+:root{--bg:#f4f6f8;--card:#fff;--line:#e3e8ef;--txt:#1f2937;--mut:#6b7280;--brand:#0f6e56;--brand-l:#e1f5ee;--amber:#b45309;--amber-l:#faeeda}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:var(--bg);color:var(--txt);padding-bottom:96px}
+header{position:sticky;top:0;z-index:9;background:var(--brand);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px}
+header b{font-size:16px;font-weight:500}
+header .sub{font-size:12px;opacity:.85;margin-left:auto;text-align:right}
+.wrap{padding:12px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
+.chip{flex:0 0 auto;padding:8px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:14px;white-space:nowrap}
+.chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.chip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#cbd5e1;margin-right:6px;vertical-align:1px}
+.chip.done .dot{background:#34d399}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.ex{border-top:1px solid var(--line);padding:10px 0}
+.ex:first-child{border-top:0}
+.ex-h{display:flex;align-items:baseline;gap:8px}
+.ex-h .n{font-weight:500;font-size:15px}
+.ex-h .p{font-size:12px;color:var(--mut);margin-left:auto;white-space:nowrap}
+.ex-h .ref{font-size:12px;color:var(--amber);background:var(--amber-l);padding:1px 6px;border-radius:6px}
+input.tok{width:100%;margin-top:8px;padding:10px 12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fbfdfe;font-family:ui-monospace,Menlo,monospace}
+input.tok:focus{outline:2px solid var(--brand-l);border-color:var(--brand)}
+.row2{display:flex;gap:8px;margin-top:8px}
+.btn{flex:1;padding:9px 0;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:14px;color:var(--txt)}
+.btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
+.btn.gh{color:var(--mut)}
+.pr{margin-top:6px;font-size:12.5px;color:var(--brand)}
+.pr b{font-size:14px}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:10px;align-items:center}
+.bar .stat{font-size:12px;color:var(--mut);flex:0 0 auto}
+.bar .big{flex:1;padding:13px 0;border-radius:12px;font-size:16px;border:0;background:var(--brand);color:#fff;font-weight:500}
+.bar .big[disabled]{background:#cbd5e1}
+.hint{font-size:12.5px;color:var(--mut);line-height:1.6}
+.empty{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--mut);font-size:14px}
+.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;max-width:86%;text-align:center}
+.toast.on{opacity:.95}
+</style>
+</head>
+<body>
+<header>
+  <b>即训即录</b>
+  <span class="sub" id="hdr">加载中…</span>
+</header>
+<div class="wrap">
+  <div id="app"></div>
+</div>
+<div class="bar">
+  <span class="stat" id="stat"></span>
+  <button class="big" id="send" onclick="send()">📤 一键回传</button>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+var API='https://textdb.online';
+var Q=new URLSearchParams(location.search);
+var KEY=Q.get('key')||'tixiao-nanpai-2026';
+var DAY=null, LOG={}, SENT={}, cur=null;
+
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function toast(t,ms){ var el=$('toast'); el.textContent=t; el.classList.add('on'); clearTimeout(el._t); el._t=setTimeout(function(){ el.classList.remove('on'); }, ms||2200); }
+function todayStr(){ var d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+/* 口令解析：80x5 85x5 85x4 ／ 80*5 ／ 80×5 ／ 80 5 */
+function parseTok(s){
+  var out=[], re=/(-?\d+(?:\.\d+)?)\s*(?:[x×*]|\s)\s*(\d+)/g, m, rest=String(s||'');
+  while((m=re.exec(rest))){ var w=parseFloat(m[1]), r=parseInt(m[2],10); if(w>0&&r>0&&r<=60) out.push([w,r]); }
+  return out;
+}
+/* PR 估算：Epley 与 Brzycki 取保守值；≤8 次才计入 */
+function est1RM(w,r){
+  if(!(w>0) || !(r>0) || r>8) return null;
+  var epley=w*(1+r/30), brz=(r<37)? w*36/(37-r) : null;
+  var v=(brz==null)? epley : Math.min(epley,brz);
+  return Math.round(v*10)/10;
+}
+function lsk(){ return 'yflog_'+KEY+'_'+((DAY&&DAY.at)||todayStr()); }
+function loadLocal(){ try{ var o=JSON.parse(localStorage.getItem(lsk())||'{}'); LOG=o.log||{}; SENT=o.sent||{}; }catch(e){ LOG={}; SENT={}; } }
+function saveLocal(){ try{ localStorage.setItem(lsk(), JSON.stringify({log:LOG, sent:SENT})); }catch(e){} }
+
+fetch(API+'/'+encodeURIComponent(KEY)+'-day').then(function(r){ return r.text(); }).then(function(t){
+  if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>请教练在 YouthFit「训练记录」页点<br><b>📤 上传今日课表到手机端</b></div>'; $('send').disabled=true; return; }
+  DAY=JSON.parse(t); loadLocal();
+  $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day;
+  if(!cur) cur=(DAY.items[0]||{}).athId;
+  render();
+}).catch(function(e){
+  $('hdr').textContent='网络异常';
+  $('app').innerHTML='<div class="empty">读取课表失败：'+esc(e)+'<br><br>检查网络后下拉刷新</div>';
+});
+
+function recOf(it){ return (LOG[it.athId]=LOG[it.athId]||{}); }
+function isDone(it){ var r=recOf(it); return it.ex.some(function(e){ return (r[e.name]||'').trim(); }); }
+function render(){
+  var items=DAY.items;
+  var chips=items.map(function(it){ return '<div class="chip'+(it.athId===cur?' on':'')+(isDone(it)?' done':'')+'" onclick="cur=\''+it.athId+'\';render()"><span class="dot"></span>'+esc(it.name)+'</div>'; }).join('');
+  var it=items.filter(function(x){ return x.athId===cur; })[0]||items[0];
+  var r=recOf(it);
+  var body=it.ex.map(function(e,i){
+    var tok=r[e.name]||'', sets=parseTok(tok);
+    var best=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
+    var plan=e.sets+'×'+e.reps;
+    var ref=(e.refW!=null)?('<span class="ref">参考 '+e.refW+'kg</span>'):'';
+    return '<div class="ex">'+
+      '<div class="ex-h"><span class="n">'+esc(e.name)+'</span>'+ref+'<span class="p">计划 '+plan+'</span></div>'+
+      '<input class="tok" id="t'+i+'" value="'+esc(tok)+'" placeholder="'+(e.refW!=null? (e.refW+'x'+String(e.reps).replace(/[^\d]/g,'')||'') +' ' : '')+'如 80x5 85x5 85x4" inputmode="text" autocomplete="off" oninput="onTok('+i+')">'+
+      '<div class="row2"><button class="btn gh" onclick="fill('+i+')">按计划填</button><button class="btn gh" onclick="clr('+i+')">清空</button></div>'+
+      (best?('<div class="pr">本次最佳估算 1RM <b>'+best+'kg</b>'+(sets.length?(' · 来自 '+sets[sets.length-1][0]+'×'+sets[sets.length-1][1]):'')+'</div>'):(sets.length?'<div class="pr" style="color:var(--mut)">次数 >8，只记训练量不计 PR</div>':''))+
+      '</div>';
+  }).join('');
+  $('app').innerHTML='<div class="chips">'+chips+'</div>'+
+    '<div class="card"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px"><b style="font-size:16px">'+esc(it.name)+'</b><span class="hint">'+esc(it.pos||'')+' · 只录主项</span>'+(SENT[it.athId]?'<span class="hint" style="margin-left:auto;color:var(--brand)">已回传</span>':'')+'</div>'+body+'</div>'+
+    '<div class="card hint">只录<b>跟计划不一样</b>的：没填 = 按计划完成。一行一组，如 <b>80x5 85x5 85x4</b>。<br>数据先存本机（换人/刷新都不丢），练完点右下「一键回传」。</div>';
+  var done=items.filter(isDone).length;
+  $('stat').textContent=done+'/'+items.length+' 人已录';
+  $('send').disabled=(done===0);
+}
+function onTok(i){
+  var it=DAY.items.filter(function(x){ return x.athId===cur; })[0]||DAY.items[0];
+  var v=$('t'+i).value;
+  recOf(it)[it.ex[i].name]=v; saveLocal();
+  var cards=$('app').querySelectorAll('.ex')[i];
+  var sets=parseTok(v), best=null;
+  sets.forEach(function(s){ var x=est1RM(s[0],s[1]); if(x&&(!best||x>best)) best=x; });
+  var prEl=cards.querySelector('.pr');
+  if(prEl){ prEl.innerHTML = best? ('本次最佳估算 1RM <b>'+best+'kg</b>') : (sets.length? '次数 >8，只记训练量不计 PR' : ''); }
+  $('stat').textContent=DAY.items.filter(isDone).length+'/'+DAY.items.length+' 人已录';
+  $('send').disabled=(DAY.items.filter(isDone).length===0);
+}
+function fill(i){
+  var it=DAY.items.filter(function(x){ return x.athId===cur; })[0]||DAY.items[0];
+  var e=it.ex[i], w=(e.refW!=null?e.refW:''), n=parseInt(String(e.sets),10)||3, r=parseInt(String(e.reps).replace(/[^\d]/g,''),10)||5;
+  if(w===''){ toast('该动作没有参考重量，请手输，如 60x5'); return; }
+  var arr=[]; for(var k=0;k<n;k++) arr.push(w+'x'+r);
+  $('t'+i).value=arr.join(' '); onTok(i);
+}
+function clr(i){ $('t'+i).value=''; onTok(i); }
+async function send(){
+  var items=DAY.items.filter(isDone);
+  if(!items.length){ toast('还没有录入任何数据'); return; }
+  $('send').disabled=true; $('send').textContent='回传中…';
+  try{
+    var old=[]; try{ var t=await fetch(API+'/'+encodeURIComponent(KEY)+'-log').then(function(r){ return r.text(); }); old=t?JSON.parse(t):[]; }catch(e){ old=[]; }
+    if(!Array.isArray(old)) old=[];
+    items.forEach(function(it){
+      var r=recOf(it), ex=[], pr={};
+      it.ex.forEach(function(e){
+        var sets=parseTok(r[e.name]||''); if(!sets.length) return;
+        ex.push({name:e.name, plan:e.sets+'×'+e.reps, sets:sets});
+        var best=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
+        if(best!=null) pr[e.name]=best;
+      });
+      if(!ex.length) return;
+      old=old.filter(function(x){ return !(x.at===DAY.at && x.athId===it.athId); });
+      old.push({at:DAY.at, athId:it.athId, name:it.name, ex:ex, pr:pr, ts:Date.now()});
+      SENT[it.athId]=1;
+    });
+    var body='key='+encodeURIComponent(KEY+'-log')+'&value='+encodeURIComponent(JSON.stringify(old));
+    var res=await fetch(API+'/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){ return r.json(); });
+    if(res.status!==1){ throw new Error('云端返回 '+JSON.stringify(res).slice(0,60)); }
+    saveLocal(); render();
+    toast('✅ 已回传 '+items.length+' 人 —— 电脑端点「拉取训练记录」即可并入', 3000);
+  }catch(e){
+    toast('回传失败：'+e+'（数据已存本机，稍后再试）', 3500);
+  }
+  $('send').disabled=false; $('send').textContent='📤 一键回传';
+}
+</script>
+</body>
+</html>
