@@ -42,6 +42,17 @@ footer .send[disabled]{background:#cbd5e1}
 .toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;max-width:88%;text-align:center}
 .toast.on{opacity:.95}
 .hintline{font-size:12px;color:var(--mut);padding:0 12px 6px}
+.fx{background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 11px;margin-top:12px}
+.fx .hd{font-size:14px;font-weight:500;margin-bottom:7px}
+.fx .hd .sub{font-size:11.5px;color:var(--mut);font-weight:400;margin-left:6px}
+.fxline{display:flex;gap:6px;margin-bottom:6px}
+.fxline select,.fxline input{flex:1;min-width:0;padding:8px;border:1px solid var(--line);border-radius:9px;font-size:14px;font-family:inherit;background:#fff;color:var(--fg)}
+.fxlive{font-size:11.5px;color:var(--mut);padding:2px 0 4px;line-height:1.5}
+.fxrow{display:flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 0;border-top:1px dashed var(--line)}
+.fxrow .fxnm{font-weight:500}
+.fxrow .fxex{color:#0f6e56}
+.fxrow .fxpr{flex:1;color:var(--mut)}
+.fxrow button{padding:3px 9px;font-size:12px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--fg)}
 </style>
 </head>
 <body>
@@ -62,7 +73,10 @@ footer .send[disabled]{background:#cbd5e1}
 var API='https://textdb.online';
 var Q=new URLSearchParams(location.search);
 var KEY=Q.get('key')||'tixiao-nanpai-2026';
-var DAY=null, LOG={}, SENT={}, curEx=null;
+var DAY=null, LOG={}, SENT={}, OPEN={}, curEx=null;
+var fxAth='', fxEx='', fxIn='';
+/* 自由录入（突破测试）常用动作：可下拉选，也可自己输 */
+var FX_LIST=['抓举','高悬垂抓举','高翻','悬垂高翻','挺举','后蹲','前蹲','卧推','借力推','站姿推举','杠铃划船','罗马尼亚硬拉','深蹲跳','跳箱','负重提踵','杠铃腕弯举','引体向上','等长弓步蹲'];
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -83,14 +97,67 @@ function est1RM(w,r){
 }
 function num(s){ var v=parseFloat(String(s==null?'':s)); return isNaN(v)?null:v; }
 function lsk(){ return 'yflog_'+KEY+'_'+((DAY&&DAY.at)||todayStr()); }
-function loadLocal(){ try{ var o=JSON.parse(localStorage.getItem(lsk())||'{}'); LOG=o.log||{}; SENT=o.sent||{}; }catch(e){ LOG={}; SENT={}; } }
-function saveLocal(){ try{ localStorage.setItem(lsk(), JSON.stringify({log:LOG, sent:SENT})); }catch(e){} }
+function loadLocal(){ try{ var o=JSON.parse(localStorage.getItem(lsk())||'{}'); LOG=o.log||{}; SENT=o.sent||{}; OPEN=o.open||{}; }catch(e){ LOG={}; SENT={}; OPEN={}; } }
+function saveLocal(){ try{ localStorage.setItem(lsk(), JSON.stringify({log:LOG, sent:SENT, open:OPEN})); }catch(e){} }
 function planNum(reps){ var n=parseInt(String(reps).replace(/[^\d]/g,''),10); return n||0; }
 function exList(){ var seen={}, out=[]; DAY.items.forEach(function(it){ it.ex.forEach(function(e){ if(!seen[e.name]){ seen[e.name]=1; out.push(e.name); } }); }); return out; }
 function exOf(it, name){ return it.ex.filter(function(e){ return e.name===name; })[0] || null; }
 function tokOf(athId, name){ return ((LOG[athId]||{})[name]||'').trim(); }
 function isDone(it, name){ return !!tokOf(it.athId, name); }
 
+/* ── 自由录入 · 突破测试（2026-09-14）──
+ * 想到更新谁、哪个动作，就选谁 + 填「重量×次数」，支持多组、任意次数（≤8 次才倒推 1RM）。
+ * 与点名数据一起回传：电脑端拉取时若推算值高于档案 1RM，会自动写成一条新的测验记录。 */
+function fxBest(tok){
+  var best=null; parseTok(tok).forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
+  return best;
+}
+function fxLive(){
+  var el=$('fxlive'); if(!el) return;
+  var tok=$('fxSets')?$('fxSets').value:'';
+  var sets=parseTok(tok);
+  if(!sets.length){ el.textContent='格式：重量×次数，可多组 —— 例 100x5 105x3（次数 >8 只记训练量，不倒推 1RM）'; return; }
+  var parts=sets.map(function(s){ var v=est1RM(s[0],s[1]); return s[0]+'×'+s[1]+'→'+(v==null?'—':v+'kg'); });
+  var b=fxBest(tok);
+  var tip = (b==null) ? '　<span style="color:#b45309">次数超过 8，不倒推 1RM（只记训练量）</span>' : '';
+  el.innerHTML=esc(parts.join('  '))+'　<b style="color:#0f6e56">最佳估算 '+(b==null?'—':b+'kg')+'</b>'+tip;
+}
+function fxAdd(){
+  var ath=$('fxAth').value, nm=($('fxEx').value||'').trim(), tok=($('fxSets').value||'').trim();
+  if(!nm){ toast('先选/填一个动作'); return; }
+  if(!parseTok(tok).length){ toast('格式形如 100x5 105x3'); return; }
+  OPEN[ath]=OPEN[ath]||{};
+  var old=OPEN[ath][nm];
+  var merged=((old&&old.sets)?old.sets+' ':'')+tok;
+  OPEN[ath][nm]={sets:merged, est:fxBest(merged), ts:Date.now()};
+  saveLocal(); render();
+  var it=byId(ath);
+  toast('已加入：'+(it?it.name:'')+' '+nm+' → 估算 '+(fxBest(merged)==null?'—':fxBest(merged)+'kg'), 2600);
+}
+function fxDel(athId, nm){ if(OPEN[athId]){ delete OPEN[athId][nm]; if(!Object.keys(OPEN[athId]).length) delete OPEN[athId]; } saveLocal(); render(); }
+function openCard(){
+  var opts=DAY.items.map(function(it){ return '<option value="'+esc(it.athId)+'"'+(it.athId===fxAth?' selected':'')+'>'+esc(it.name)+'</option>'; }).join('');
+  var list=FX_LIST.map(function(n){ return '<option value="'+esc(n)+'"></option>'; }).join('');
+  var rows='';
+  Object.keys(OPEN).forEach(function(aid){
+    var it=byId(aid); if(!it) return;
+    Object.keys(OPEN[aid]).forEach(function(nm){
+      var o=OPEN[aid][nm];
+      rows+='<div class="fxrow"><span class="fxnm">'+esc(it.name)+'</span><span class="fxex">'+esc(nm)+'</span>'+
+        '<span class="fxpr">'+esc(o.sets)+' → '+(o.est==null?'—':'<b>'+o.est+'kg</b>')+'</span>'+
+        '<button onclick="fxDel(\''+aid+'\',\''+esc(nm)+'\')">删</button></div>';
+    });
+  });
+  return '<div class="fx"><div class="hd">自由录入 · 突破测试<span class="sub">想更新谁、哪个动作就填谁 · 多 RM 自动倒推 1RM</span></div>'+
+    '<div class="fxline"><select id="fxAth" onchange="fxAth=this.value">'+opts+'</select>'+
+      '<input id="fxEx" list="fxListSrc" placeholder="动作（可选可自输）" value="'+esc(fxEx)+'" onchange="fxEx=this.value">'+
+      '<datalist id="fxListSrc">'+list+'</datalist></div>'+
+    '<div class="fxline"><input id="fxSets" placeholder="100x5 105x3" value="'+esc(fxIn)+'" oninput="fxIn=this.value;fxLive()">'+
+      '<button class="big" style="flex:0 0 auto" onclick="fxAdd()">＋ 加入</button></div>'+
+    '<div class="fxlive" id="fxlive"></div>'+
+    (rows?('<div class="fxlist">'+rows+'</div>'):'')+
+  '</div>';
+}
 fetch(API+'/'+encodeURIComponent(KEY)+'-day').then(function(r){ return r.text(); }).then(function(t){
   if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>请在 YouthFit「训练记录」页点<br><b>📤 上传今日课表到手机端</b></div>'; $('send').disabled=true; return; }
   DAY=JSON.parse(t); loadLocal();
@@ -184,7 +251,7 @@ function render(){
       tune+
       '</div>';
   }).join('');
-  $('app').innerHTML=rows;
+  $('app').innerHTML=rows+openCard();
   var doneAll=DAY.items.filter(function(it){ return exOf(it,curEx) && isDone(it,curEx); }).length;
   var totAll=DAY.items.filter(function(it){ return exOf(it,curEx); }).length;
   $('prog').textContent=curEx+'：'+doneAll+'/'+totAll+' 人已录';
@@ -192,11 +259,12 @@ function render(){
   var total=0, hit=0;
   DAY.items.forEach(function(it){ exList().forEach(function(n){ if(exOf(it,n)){ total++; if(isDone(it,n)) hit++; } }); });
   $('st').textContent=hit+'/'+total+' 格';
-  $('send').disabled=(hit===0);
+  var openN=0; Object.keys(OPEN).forEach(function(k){ openN+=Object.keys(OPEN[k]).length; });
+  $('send').disabled=(hit===0 && openN===0);
 }
 function reset(athId){ delete LOG[athId][curEx]; saveLocal(); render(); }
 async function send(){
-  var items=DAY.items.filter(function(it){ return Object.keys(LOG[it.athId]||{}).some(function(k){ return (LOG[it.athId][k]||'').trim(); }); });
+  var items=DAY.items.filter(function(it){ return Object.keys(LOG[it.athId]||{}).some(function(k){ return (LOG[it.athId][k]||'').trim(); }) || Object.keys(OPEN[it.athId]||{}).length; });
   if(!items.length){ toast('还没有录入任何数据'); return; }
   $('send').disabled=true; $('send').textContent='回传中…';
   try{
@@ -209,6 +277,14 @@ async function send(){
         ex.push({name:e.name, plan:e.sets+'×'+e.reps, sets:sets});
         var best=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
         if(best!=null) pr[e.name]=best;
+      });
+      /* 自由录入（突破测试）：任何动作、任何次数，合并进同一份回传 */
+      var op=OPEN[it.athId]||{};
+      Object.keys(op).forEach(function(nm){
+        var sets=parseTok(op[nm].sets); if(!sets.length) return;
+        ex.push({name:nm, plan:'自由录入', sets:sets});
+        var b=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!b||v>b)) b=v; });
+        if(b!=null && (pr[nm]==null || b>pr[nm])) pr[nm]=b;
       });
       if(!ex.length) return;
       old=old.filter(function(x){ return !(x.at===DAY.at && x.athId===it.athId); });
