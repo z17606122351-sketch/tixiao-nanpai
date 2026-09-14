@@ -6,61 +6,63 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>即训即录 · 上海市体校男排</title>
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--line:#e3e8ef;--txt:#1f2937;--mut:#6b7280;--brand:#0f6e56;--brand-l:#e1f5ee;--amber:#b45309;--amber-l:#faeeda}
+:root{--bg:#f4f6f8;--card:#fff;--line:#e3e8ef;--txt:#1f2937;--mut:#6b7280;--brand:#0f6e56;--brand-l:#e1f5ee;--amber:#b45309;--amber-l:#faeeda;--done:#e8f7f1}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:var(--bg);color:var(--txt);padding-bottom:96px}
-header{position:sticky;top:0;z-index:9;background:var(--brand);color:#fff;padding:10px 14px;display:flex;align-items:center;gap:8px}
+body{margin:0;font:15px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;background:var(--bg);color:var(--txt);padding-bottom:92px}
+header{position:sticky;top:0;z-index:9;background:var(--brand);color:#fff;padding:9px 14px;display:flex;align-items:center;gap:8px}
 header b{font-size:16px;font-weight:500}
 header .sub{font-size:12px;opacity:.85;margin-left:auto;text-align:right}
-.wrap{padding:12px}
-.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
-.chip{flex:0 0 auto;padding:8px 12px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:14px;white-space:nowrap}
-.chip.on{background:var(--brand);color:#fff;border-color:var(--brand)}
-.chip .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#cbd5e1;margin-right:6px;vertical-align:1px}
-.chip.done .dot{background:#34d399}
-.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
-.ex{border-top:1px solid var(--line);padding:10px 0}
-.ex:first-child{border-top:0}
-.ex-h{display:flex;align-items:baseline;gap:8px}
-.ex-h .n{font-weight:500;font-size:15px}
-.ex-h .p{font-size:12px;color:var(--mut);margin-left:auto;white-space:nowrap}
-.ex-h .ref{font-size:12px;color:var(--amber);background:var(--amber-l);padding:1px 6px;border-radius:6px}
-input.tok{width:100%;margin-top:8px;padding:10px 12px;font-size:16px;border:1px solid var(--line);border-radius:10px;background:#fbfdfe;font-family:ui-monospace,Menlo,monospace}
-input.tok:focus{outline:2px solid var(--brand-l);border-color:var(--brand)}
-.row2{display:flex;gap:8px;margin-top:8px}
-.btn{flex:1;padding:9px 0;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:14px;color:var(--txt)}
+.tabs{position:sticky;top:42px;z-index:8;background:var(--bg);display:flex;gap:8px;overflow-x:auto;padding:10px 12px 8px;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--line)}
+.tab{flex:0 0 auto;padding:7px 13px;border-radius:999px;background:#fff;border:1px solid var(--line);font-size:14px;white-space:nowrap}
+.tab.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.tab .n{font-size:12px;opacity:.75;margin-left:5px}
+.bar2{display:flex;gap:8px;align-items:center;padding:9px 12px 0}
+.bar2 .p{font-size:12.5px;color:var(--mut);flex:1}
+.btn{padding:8px 12px;border:1px solid var(--line);background:#fff;border-radius:10px;font-size:13.5px;color:var(--txt)}
 .btn.pri{background:var(--brand);color:#fff;border-color:var(--brand)}
-.btn.gh{color:var(--mut)}
-.pr{margin-top:6px;font-size:12.5px;color:var(--brand)}
-.pr b{font-size:14px}
-.bar{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:10px 12px;display:flex;gap:10px;align-items:center}
-.bar .stat{font-size:12px;color:var(--mut);flex:0 0 auto}
-.bar .big{flex:1;padding:13px 0;border-radius:12px;font-size:16px;border:0;background:var(--brand);color:#fff;font-weight:500}
-.bar .big[disabled]{background:#cbd5e1}
-.hint{font-size:12.5px;color:var(--mut);line-height:1.6}
+.wrap{padding:8px 12px 12px}
+.row{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin-bottom:8px}
+.row.done{background:var(--done);border-color:#9fd9c4}
+.row .line1{display:flex;align-items:center;gap:8px}
+.row .nm{font-weight:500;font-size:15px;flex:0 0 auto;min-width:56px}
+.row .pl{font-size:12px;color:var(--mut);flex:1;line-height:1.35;display:block}
+.row .pl b{color:var(--amber);font-weight:500}
+.row .pl .pr{color:var(--brand);display:block}
+.big{padding:11px 14px;border-radius:11px;border:1px solid var(--line);background:#fff;font-size:15px;min-width:78px}
+.big.on{background:var(--brand);color:#fff;border-color:var(--brand)}
+.tune{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tune button{padding:7px 9px;border:1px solid var(--line);background:#fff;border-radius:9px;font-size:13px;color:var(--mut)}
+.tune input{padding:7px 9px;border:1px solid var(--line);border-radius:9px;font-size:15px;width:100%;font-family:ui-monospace,Menlo,monospace;margin-top:6px}
+.miss{font-size:12px;color:var(--amber)}
+footer{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:9px 12px;display:flex;gap:10px;align-items:center}
+footer .st{font-size:12px;color:var(--mut)}
+footer .send{flex:1;padding:12px 0;border-radius:12px;font-size:16px;border:0;background:var(--brand);color:#fff;font-weight:500}
+footer .send[disabled]{background:#cbd5e1}
 .empty{background:#fff;border:1px dashed var(--line);border-radius:12px;padding:18px;text-align:center;color:var(--mut);font-size:14px}
-.toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;max-width:86%;text-align:center}
+.toast{position:fixed;left:50%;bottom:104px;transform:translateX(-50%);background:#111827;color:#fff;padding:10px 14px;border-radius:10px;font-size:14px;opacity:0;transition:opacity .2s;max-width:88%;text-align:center}
 .toast.on{opacity:.95}
+.hintline{font-size:12px;color:var(--mut);padding:0 12px 6px}
 </style>
 </head>
 <body>
-<header>
-  <b>即训即录</b>
-  <span class="sub" id="hdr">加载中…</span>
-</header>
-<div class="wrap">
-  <div id="app"></div>
+<header><b>即训即录</b><span class="sub" id="hdr">加载中…</span></header>
+<div id="tabs" class="tabs"></div>
+<div class="bar2">
+  <span class="p" id="prog"></span>
+  <button class="btn" onclick="allDone()">✓ 全队按计划完成</button>
 </div>
-<div class="bar">
-  <span class="stat" id="stat"></span>
-  <button class="big" id="send" onclick="send()">📤 一键回传</button>
-</div>
+<div class="hintline" id="hint"></div>
+<div class="wrap" id="app"></div>
+<footer>
+  <span class="st" id="st"></span>
+  <button class="send" id="send" onclick="send()">📤 一键回传</button>
+</footer>
 <div class="toast" id="toast"></div>
 <script>
 var API='https://textdb.online';
 var Q=new URLSearchParams(location.search);
 var KEY=Q.get('key')||'tixiao-nanpai-2026';
-var DAY=null, LOG={}, SENT={}, cur=null;
+var DAY=null, LOG={}, SENT={}, curEx=null;
 
 function $(id){ return document.getElementById(id); }
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
@@ -79,76 +81,110 @@ function est1RM(w,r){
   var v=(brz==null)? epley : Math.min(epley,brz);
   return Math.round(v*10)/10;
 }
+function num(s){ var v=parseFloat(String(s==null?'':s)); return isNaN(v)?null:v; }
 function lsk(){ return 'yflog_'+KEY+'_'+((DAY&&DAY.at)||todayStr()); }
 function loadLocal(){ try{ var o=JSON.parse(localStorage.getItem(lsk())||'{}'); LOG=o.log||{}; SENT=o.sent||{}; }catch(e){ LOG={}; SENT={}; } }
 function saveLocal(){ try{ localStorage.setItem(lsk(), JSON.stringify({log:LOG, sent:SENT})); }catch(e){} }
+function planNum(reps){ var n=parseInt(String(reps).replace(/[^\d]/g,''),10); return n||0; }
+function exList(){ var seen={}, out=[]; DAY.items.forEach(function(it){ it.ex.forEach(function(e){ if(!seen[e.name]){ seen[e.name]=1; out.push(e.name); } }); }); return out; }
+function exOf(it, name){ return it.ex.filter(function(e){ return e.name===name; })[0] || null; }
+function tokOf(athId, name){ return ((LOG[athId]||{})[name]||'').trim(); }
+function isDone(it, name){ return !!tokOf(it.athId, name); }
 
 fetch(API+'/'+encodeURIComponent(KEY)+'-day').then(function(r){ return r.text(); }).then(function(t){
-  if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>请教练在 YouthFit「训练记录」页点<br><b>📤 上传今日课表到手机端</b></div>'; $('send').disabled=true; return; }
+  if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>请在 YouthFit「训练记录」页点<br><b>📤 上传今日课表到手机端</b></div>'; $('send').disabled=true; return; }
   DAY=JSON.parse(t); loadLocal();
   $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day;
-  if(!cur) cur=(DAY.items[0]||{}).athId;
+  var L=exList(); if(!curEx||L.indexOf(curEx)<0) curEx=L[0];
   render();
 }).catch(function(e){
   $('hdr').textContent='网络异常';
-  $('app').innerHTML='<div class="empty">读取课表失败：'+esc(e)+'<br><br>检查网络后下拉刷新</div>';
+  $('app').innerHTML='<div class="empty">读取课表失败：'+esc(e)+'<br><br>检查网络后刷新</div>';
 });
 
-function recOf(it){ return (LOG[it.athId]=LOG[it.athId]||{}); }
-function isDone(it){ var r=recOf(it); return it.ex.some(function(e){ return (r[e.name]||'').trim(); }); }
+/* 点一下 = 该队员这个动作按计划完成（默认全部组：refW×计划次数） */
+function mark(it, name, on){
+  var e=exOf(it,name); if(!e) return;
+  if(!on){ LOG[it.athId]=LOG[it.athId]||{}; delete LOG[it.athId][name]; }
+  else{
+    if(e.refW==null){ toast('「'+it.name+'」'+name+' 没有参考重量 —— 展开手输（如 60x5）'); return; }
+    var reps=planNum(e.reps)||5, n=parseInt(String(e.sets),10)||3, arr=[];
+    for(var k=0;k<n;k++) arr.push(e.refW+'x'+reps);
+    LOG[it.athId]=LOG[it.athId]||{}; LOG[it.athId][name]=arr.join(' ');
+  }
+  saveLocal(); render();
+}
+function toggle(athId, name){ var it=byId(athId); mark(it, name, !isDone(it,name)); }
+function byId(id){ return DAY.items.filter(function(x){ return x.athId===id; })[0]; }
+/* 微调：改所有组的重量 / 次数（保留组数） */
+function adj(athId, name, dw, dr){
+  var it=byId(athId), sets=parseTok(tokOf(athId,name));
+  if(!sets.length) return;
+  var out=sets.map(function(s){
+    var w=Math.max(2.5, Math.round((s[0]+dw)*10)/10), r=Math.max(1, s[1]+dr);
+    return w+'x'+r;
+  });
+  LOG[athId][name]=out.join(' '); saveLocal(); render();
+}
+function setTok(athId, name, v){ LOG[athId]=LOG[athId]||{}; if(v.trim()) LOG[athId][name]=v.trim(); else delete LOG[athId][name]; saveLocal(); render(); }
+function allDone(){
+  var n=0;
+  DAY.items.forEach(function(it){
+    var e=exOf(it,curEx); if(!e || e.refW==null) return;
+    if(!isDone(it,curEx)){ mark(it,curEx,true); n++; }
+  });
+  toast(n? ('已标记 '+n+' 人按计划完成 '+curEx) : '该动作大家都已标记', 1600);
+}
 function render(){
-  var items=DAY.items;
-  var chips=items.map(function(it){ return '<div class="chip'+(it.athId===cur?' on':'')+(isDone(it)?' done':'')+'" onclick="cur=\''+it.athId+'\';render()"><span class="dot"></span>'+esc(it.name)+'</div>'; }).join('');
-  var it=items.filter(function(x){ return x.athId===cur; })[0]||items[0];
-  var r=recOf(it);
-  var body=it.ex.map(function(e,i){
-    var tok=r[e.name]||'', sets=parseTok(tok);
+  var L=exList();
+  $('tabs').innerHTML=L.map(function(n){
+    var done=DAY.items.filter(function(it){ return exOf(it,n) && isDone(it,n); }).length;
+    var tot=DAY.items.filter(function(it){ return exOf(it,n); }).length;
+    return '<div class="tab'+(n===curEx?' on':'')+'" onclick="curEx=\''+esc(n)+'\';render()">'+esc(n)+'<span class="n">'+done+'/'+tot+'</span></div>';
+  }).join('');
+  var rows=DAY.items.map(function(it){
+    var e=exOf(it,curEx);
+    if(!e) return '<div class="row"><div class="line1"><span class="nm">'+esc(it.name)+'</span><span class="pl">今日无此动作</span></div></div>';
+    var tok=tokOf(it.athId,curEx), done=!!tok, sets=parseTok(tok);
     var best=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
-    var plan=e.sets+'×'+e.reps;
-    var ref=(e.refW!=null)?('<span class="ref">参考 '+e.refW+'kg</span>'):'';
-    return '<div class="ex">'+
-      '<div class="ex-h"><span class="n">'+esc(e.name)+'</span>'+ref+'<span class="p">计划 '+plan+'</span></div>'+
-      '<input class="tok" id="t'+i+'" value="'+esc(tok)+'" placeholder="'+(e.refW!=null? (e.refW+'x'+String(e.reps).replace(/[^\d]/g,'')||'') +' ' : '')+'如 80x5 85x5 85x4" inputmode="text" autocomplete="off" oninput="onTok('+i+')">'+
-      '<div class="row2"><button class="btn gh" onclick="fill('+i+')">按计划填</button><button class="btn gh" onclick="clr('+i+')">清空</button></div>'+
-      (best?('<div class="pr">本次最佳估算 1RM <b>'+best+'kg</b>'+(sets.length?(' · 来自 '+sets[sets.length-1][0]+'×'+sets[sets.length-1][1]):'')+'</div>'):(sets.length?'<div class="pr" style="color:var(--mut)">次数 >8，只记训练量不计 PR</div>':''))+
+    var planTxt=(e.refW!=null? '<b>'+e.refW+'kg</b> ':'<span class="miss">需手输重量</span> ')+'× '+e.sets+' 组 × '+(planNum(e.reps)||'')+' 次';
+    var detail = done? ('<span class="pr">已记 '+(sets.length?sets.length:0)+' 组'+(best?(' · 估算 PR '+best+'kg'):'')+'</span>')
+                     : '<span class="pr" style="color:var(--mut)">未录 = 按计划完成</span>';
+    var tune = done? ('<div class="tune">'+
+        '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',2.5,0)">重+2.5</button>'+
+        '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',-2.5,0)">重−2.5</button>'+
+        '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',0,1)">次+1</button>'+
+        '<button onclick="adj(\''+it.athId+'\',\''+esc(curEx)+'\',0,-1)">次−1</button>'+
+        '<button onclick="reset(\''+it.athId+'\')">重置</button></div>'+
+        '<input value="'+esc(tok)+'" placeholder="精修：80x5 80x5 77.5x4" onchange="setTok(\''+it.athId+'\',\''+esc(curEx)+'\',this.value)">')
+      : '';
+    return '<div class="row'+(done?' done':'')+'">'+
+      '<div class="line1"><span class="nm">'+esc(it.name)+'</span>'+
+      '<span class="pl">'+planTxt+detail+'</span>'+
+      '<button class="big'+(done?' on':'')+'" onclick="toggle(\''+it.athId+'\',\''+esc(curEx)+'\')">'+(done?'✓ 已录':'完成')+'</button></div>'+
+      tune+
       '</div>';
   }).join('');
-  $('app').innerHTML='<div class="chips">'+chips+'</div>'+
-    '<div class="card"><div style="display:flex;align-items:baseline;gap:8px;margin-bottom:2px"><b style="font-size:16px">'+esc(it.name)+'</b><span class="hint">'+esc(it.pos||'')+' · 只录主项</span>'+(SENT[it.athId]?'<span class="hint" style="margin-left:auto;color:var(--brand)">已回传</span>':'')+'</div>'+body+'</div>'+
-    '<div class="card hint">只录<b>跟计划不一样</b>的：没填 = 按计划完成。一行一组，如 <b>80x5 85x5 85x4</b>。<br>数据先存本机（换人/刷新都不丢），练完点右下「一键回传」。</div>';
-  var done=items.filter(isDone).length;
-  $('stat').textContent=done+'/'+items.length+' 人已录';
-  $('send').disabled=(done===0);
+  $('app').innerHTML=rows;
+  var doneAll=DAY.items.filter(function(it){ return exOf(it,curEx) && isDone(it,curEx); }).length;
+  var totAll=DAY.items.filter(function(it){ return exOf(it,curEx); }).length;
+  $('prog').textContent=curEx+'：'+doneAll+'/'+totAll+' 人已录';
+  $('hint').textContent='点「完成」= 按他的计划重量×次数记满全部组；要改就用 重±2.5 / 次±1 或展开精修。';
+  var total=0, hit=0;
+  DAY.items.forEach(function(it){ exList().forEach(function(n){ if(exOf(it,n)){ total++; if(isDone(it,n)) hit++; } }); });
+  $('st').textContent=hit+'/'+total+' 格';
+  $('send').disabled=(hit===0);
 }
-function onTok(i){
-  var it=DAY.items.filter(function(x){ return x.athId===cur; })[0]||DAY.items[0];
-  var v=$('t'+i).value;
-  recOf(it)[it.ex[i].name]=v; saveLocal();
-  var cards=$('app').querySelectorAll('.ex')[i];
-  var sets=parseTok(v), best=null;
-  sets.forEach(function(s){ var x=est1RM(s[0],s[1]); if(x&&(!best||x>best)) best=x; });
-  var prEl=cards.querySelector('.pr');
-  if(prEl){ prEl.innerHTML = best? ('本次最佳估算 1RM <b>'+best+'kg</b>') : (sets.length? '次数 >8，只记训练量不计 PR' : ''); }
-  $('stat').textContent=DAY.items.filter(isDone).length+'/'+DAY.items.length+' 人已录';
-  $('send').disabled=(DAY.items.filter(isDone).length===0);
-}
-function fill(i){
-  var it=DAY.items.filter(function(x){ return x.athId===cur; })[0]||DAY.items[0];
-  var e=it.ex[i], w=(e.refW!=null?e.refW:''), n=parseInt(String(e.sets),10)||3, r=parseInt(String(e.reps).replace(/[^\d]/g,''),10)||5;
-  if(w===''){ toast('该动作没有参考重量，请手输，如 60x5'); return; }
-  var arr=[]; for(var k=0;k<n;k++) arr.push(w+'x'+r);
-  $('t'+i).value=arr.join(' '); onTok(i);
-}
-function clr(i){ $('t'+i).value=''; onTok(i); }
+function reset(athId){ delete LOG[athId][curEx]; saveLocal(); render(); }
 async function send(){
-  var items=DAY.items.filter(isDone);
+  var items=DAY.items.filter(function(it){ return Object.keys(LOG[it.athId]||{}).some(function(k){ return (LOG[it.athId][k]||'').trim(); }); });
   if(!items.length){ toast('还没有录入任何数据'); return; }
   $('send').disabled=true; $('send').textContent='回传中…';
   try{
     var old=[]; try{ var t=await fetch(API+'/'+encodeURIComponent(KEY)+'-log').then(function(r){ return r.text(); }); old=t?JSON.parse(t):[]; }catch(e){ old=[]; }
     if(!Array.isArray(old)) old=[];
     items.forEach(function(it){
-      var r=recOf(it), ex=[], pr={};
+      var r=LOG[it.athId]||{}, ex=[], pr={};
       it.ex.forEach(function(e){
         var sets=parseTok(r[e.name]||''); if(!sets.length) return;
         ex.push({name:e.name, plan:e.sets+'×'+e.reps, sets:sets});
@@ -162,12 +198,10 @@ async function send(){
     });
     var body='key='+encodeURIComponent(KEY+'-log')+'&value='+encodeURIComponent(JSON.stringify(old));
     var res=await fetch(API+'/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){ return r.json(); });
-    if(res.status!==1){ throw new Error('云端返回 '+JSON.stringify(res).slice(0,60)); }
+    if(res.status!==1) throw new Error('云端返回 '+JSON.stringify(res).slice(0,60));
     saveLocal(); render();
-    toast('✅ 已回传 '+items.length+' 人 —— 电脑端点「拉取训练记录」即可并入', 3000);
-  }catch(e){
-    toast('回传失败：'+e+'（数据已存本机，稍后再试）', 3500);
-  }
+    toast('✅ 已回传 '+items.length+' 人 —— 电脑端点「拉取训练记录」并入', 3000);
+  }catch(e){ toast('回传失败：'+e+'（数据已存本机）', 3500); }
   $('send').disabled=false; $('send').textContent='📤 一键回传';
 }
 </script>
