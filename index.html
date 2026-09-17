@@ -292,21 +292,81 @@ function svgOverlap(a, b){
   var w=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0), h=Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0);
   return (w>0&&h>0)?w*h:0;
 }
-/* cands = [[dx,dy,anchor],…] 按优先级排列；返回 {x,y,anchor}；
-   所有候选都出画布时返回 null，由调用方兜底。B = {L:左,R:右,H:高}（viewBox 坐标） */
-function svgSlot(placed, x, y, s, fs, cands, B){
-  var best=null, bestOv=Infinity;
-  for(var i=0;i<cands.length;i++){
-    var cx=x+cands[i][0], cy=y+cands[i][1], an=cands[i][2]||'end';
-    var bx=svgBox(cx,cy,s,fs,an);
-    if(bx.x0<B.L-1 || bx.x1>B.R+4) continue;        /* 出画布 → 这个候选不要 */
-    if(bx.y0<2 || bx.y1>B.H-3) continue;
-    var ov=0;
-    for(var j=0;j<placed.length;j++) ov+=svgOverlap(bx, placed[j]);
-    if(ov===0) return {x:cx, y:cy, anchor:an};
-    if(ov<bestOv){ bestOv=ov; best={x:cx, y:cy, anchor:an}; }
+/* 不透明底垫（2026-09-17 第三版）—— 画在所有线之上，把线从字底下抹掉。
+   只靠「挪位置」躲线不够：末点附近折线、计划线、虚线全挤在一起，实测
+   「截止目标 80kg · 09-19」被两条线同时穿过；而且为了躲线把标签甩到离数据点
+   一百多像素外，反而看不出标的是哪个点。垫白底后位置可以贴回锚点。 */
+function svgChip(x, y, s, fs, anchor){
+  var b=svgBox(x, y, s, fs, anchor);
+  return '<rect x="'+(b.x0-2.5).toFixed(1)+'" y="'+(b.y0-1.5).toFixed(1)+
+    '" width="'+(b.x1-b.x0+5).toFixed(1)+'" height="'+(b.y1-b.y0+3).toFixed(1)+
+    '" rx="3.5" fill="#ffffff"/>';
+}
+/* ── 文字 × 线条（2026-09-17 第二版）───────────────────────────────────
+   只避「文字 ↔ 文字」是不够的：实测两行字分开了，但绿色体重折线横穿
+   「截止目标 80kg · 09-19」，字形缝隙里露出绿线，看着就是被划掉。
+   所以把数据线也当障碍：线段与矩形相交（含端点在框内），净空 pad 像素。 */
+function svgPtIn(p, r){
+  return p[0]>=r.x0 && p[0]<=r.x1 && p[1]>=r.y0 && p[1]<=r.y1;
+}
+function svgCross(p, q, r2, s){
+  function o(a, b, c){ return (b[0]-a[0])*(c[1]-a[1]) - (b[1]-a[1])*(c[0]-a[0]); }
+  var d1=o(r2,s,p), d2=o(r2,s,q), d3=o(p,q,r2), d4=o(p,q,s);
+  return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+}
+function svgSegHit(segs, box, pad){
+  if(!segs || !segs.length) return false;
+  pad=(pad==null)?2:pad;                            /* 默认留 2px 净空，免得贴着线写 */
+  var R={x0:box.x0-pad, x1:box.x1+pad, y0:box.y0-pad, y1:box.y1+pad};
+  var E=[[R.x0,R.y0],[R.x1,R.y0],[R.x1,R.y1],[R.x0,R.y1]];
+  for(var i=0;i<segs.length;i++){
+    var a=segs[i][0], b=segs[i][1];
+    if(svgPtIn(a,R)||svgPtIn(b,R)) return true;
+    for(var k=0;k<4;k++) if(svgCross(a,b,E[k],E[(k+1)%4])) return true;
   }
-  return best;
+  return false;
+}
+/* 显式候选全撞上别的文字时自动扩一圈：dy 由小到大（尽量留在原行），
+   同一行 dx 由近到远。**范围故意收紧在 60px 内** —— 标签得留在锚点边上，
+   为了找空位甩出去一百多像素，读者就认不出它标的是哪个点了。
+   宁可轻微搭一点，也不飘走。 */
+function svgAutoCands(anchor){
+  var out=[], dys=[-5,-18,13,26,-31,39,-44,52],
+      dxs=[0,10,-10,20,-20,30,-30,45,-45,60,-60];
+  for(var k=0;k<dys.length;k++)
+    for(var i=0;i<dxs.length;i++) out.push([dxs[i], dys[k], anchor]);
+  return out;
+}
+/* cands = [[dx,dy,anchor],…] 按优先级排列；返回 {x,y,anchor}；
+   全部候选都出画布时返回 null，由调用方兜底。B = {L:左,R:右,H:高}（viewBox 坐标）
+   segs（可选）= 数据线段：已不再传入，见 trendSVG 里的说明 —— 现在靠白底垫
+   解决压线，不再靠挪位置。排序：压别的文字 ≫ 其余；压线次要。 */
+function svgSlot(placed, x, y, s, fs, cands, B, segs){
+  var best=null, bestScore=Infinity;
+  function tryList(list){
+    for(var i=0;i<list.length;i++){
+      var cx=x+list[i][0], cy=y+list[i][1], an=list[i][2]||'end';
+      var bx=svgBox(cx,cy,s,fs,an);
+      if(bx.x0<B.L-1 || bx.x1>B.R+4) continue;      /* 出画布 → 这个候选不要 */
+      if(bx.y0<2 || bx.y1>B.H-3) continue;
+      var ov=0;
+      for(var j=0;j<placed.length;j++) ov+=svgOverlap(bx, placed[j]);
+      var hit=svgSegHit(segs, bx, 2);
+      var sc=(ov>0?(1e6+ov):0)+(hit?1e5:0);
+      if(sc===0) return {x:cx, y:cy, anchor:an};
+      if(sc<bestScore){ bestScore=sc; best={x:cx, y:cy, anchor:an}; }
+    }
+    return null;
+  }
+  var r=tryList(cands);
+  if(r) return r;
+  var seen={}, auto=[];
+  for(var k=0;k<cands.length;k++){
+    var a2=cands[k][2]||'end';
+    if(!seen[a2]){ seen[a2]=1; auto=auto.concat(svgAutoCands(a2)); }
+  }
+  r=tryList(auto);
+  return r||best;
 }
 /* 体重趋势 SVG：实线=体重，虚线=位置标准体重 / 本周目标；
    设了截止目标 → 再画一条「计划线」：从当前体重连到截止日期的目标点，图上直接看到目标与期限 —— 详情卡的主视图 */
@@ -327,6 +387,12 @@ function trendSVG(p){
   if(gEnd) refs.push(gEnd.w);
   var lo=Math.min.apply(null, ws.concat(refs)), hi=Math.max.apply(null, ws.concat(refs));
   var pad=(hi-lo)||2; lo-=pad*0.18; hi+=pad*0.18;
+  /* 【2026-09-17 第三版】数据线**不再**当障碍 —— 试过把折线/计划线也纳入避让，
+     结果两个问题：① 末点附近三条线挤在一起，怎么挪都有线穿过（实测「截止目标」
+     被折线 + 计划线同时穿过）；② 为了躲线，标签被甩到离数据点一百多像素外，
+     看不出标的是哪个点。改成给标签垫不透明白底（svgChip），问题从根上没了：
+     位置可以贴回锚点，线被抹在字底下。所以 lineSegs 那套（svgPtIn/svgCross/
+     svgSegHit）现在不接进落位计算了，函数留着备用。 */
   /* 文字占位盘：先把「位置固定、从不挪动」的 Y 轴刻度与日期标签占进去，
      之后放「位置可调」的标签时用它挑空位（见 svgSlot） */
   var B={L:PL, R:W-PR, H:H};
@@ -342,52 +408,68 @@ function trendSVG(p){
     pl+=(pl?' ':'')+X(p2[0]).toFixed(1)+','+Y(p2[2]).toFixed(1);
     dots+='<circle cx="'+X(p2[0]).toFixed(1)+'" cy="'+Y(p2[2]).toFixed(1)+'" r="3.2" fill="#0f6e56"><title>'+esc(p2[0])+' '+p2[2]+'kg</title></circle>';
   });
-  var refs2='';
+  /* 参照虚线（画在折线之下）+ 它们的标签（最后统一画在线之上，见下方 lbls） */
+  var refLines='', lbls='';
   if(STD){
-    var stS='位置标准 '+STD+'kg', stY=Y(STD)-5;
-    refs2+='<line x1="'+PL+'" y1="'+Y(STD).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(STD).toFixed(1)+'" stroke="#BA7517" stroke-dasharray="6 4" stroke-width="1.4"/>'+
-      '<text x="'+(W-PR)+'" y="'+stY.toFixed(1)+'" text-anchor="end" font-size="11" fill="#BA7517">'+stS+'</text>';
-    placed.push(svgBox(W-PR, stY, stS, 11, 'end'));
+    var stS='位置标准 '+STD+'kg';
+    /* 原位置 = 虚线上方 5px；只躲别的标签，不躲线（有白底垫，压线也清楚） */
+    var sr=svgSlot(placed, W-PR, Y(STD), stS, 11,
+      [[0,-5,'end'],[0,13,'end'],[0,-18,'end'],[0,26,'end'],[0,-31,'end'],[0,39,'end']], B)
+      || {x:W-PR, y:Y(STD)-5, anchor:'end'};
+    refLines+='<line x1="'+PL+'" y1="'+Y(STD).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(STD).toFixed(1)+'" stroke="#BA7517" stroke-dasharray="6 4" stroke-width="1.4"/>';
+    lbls+=svgChip(sr.x, sr.y, stS, 11, sr.anchor)+
+      '<text x="'+sr.x.toFixed(1)+'" y="'+sr.y.toFixed(1)+'" text-anchor="'+sr.anchor+'" font-size="11" fill="#BA7517">'+stS+'</text>';
+    placed.push(svgBox(sr.x, sr.y, stS, 11, sr.anchor));
   }
   if(wtc){
     var wtS='本周目标 '+wtc+'kg';
     /* 先试「线下方」（原位置），压住了换「线上方」，再压就往外挪一圈 */
     var sl=svgSlot(placed, W-PR, Y(wtc), wtS, 11,
-      [[0,13,'end'],[0,-5,'end'],[0,26,'end'],[0,-18,'end']], B) || {x:W-PR, y:Y(wtc)+13, anchor:'end'};
-    refs2+='<line x1="'+PL+'" y1="'+Y(wtc).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(wtc).toFixed(1)+'" stroke="#A32D2D" stroke-dasharray="6 4" stroke-width="1.4"/>'+
+      [[0,13,'end'],[0,-5,'end'],[0,26,'end'],[0,-18,'end'],[0,39,'end'],[0,-31,'end']], B)
+      || {x:W-PR, y:Y(wtc)+13, anchor:'end'};
+    refLines+='<line x1="'+PL+'" y1="'+Y(wtc).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(wtc).toFixed(1)+'" stroke="#A32D2D" stroke-dasharray="6 4" stroke-width="1.4"/>';
+    lbls+=svgChip(sl.x, sl.y, wtS, 11, sl.anchor)+
       '<text x="'+sl.x.toFixed(1)+'" y="'+sl.y.toFixed(1)+'" text-anchor="'+sl.anchor+'" font-size="11" fill="#A32D2D">'+wtS+'</text>';
     placed.push(svgBox(sl.x, sl.y, wtS, 11, sl.anchor));
   }
+  /* 最新体重数字（2026-09-17）：标在最后一个数据点旁，一眼看到当前体重。
+     **先于「截止目标」摆位** —— 这是图上的主角，优先占贴点最近的位置。
+     候选按「离点最近」排：左上 → 左下 → 右上 → 右下 → 再远一点；
+     靠左/靠顶（候选会出画布）时 svgSlot 自动跳过，等于原来的自动换边。
+     压在折线上不再算问题 —— 它有 svgChip 的白底垫，线从字底下被抹掉。 */
+  var lastP=pts[pts.length-1], lx=+X(lastP[0]).toFixed(1), ly=+Y(lastP[2]).toFixed(1);
+  var lastS=lastP[2]+'kg';
+  var lp=svgSlot(placed, lx, ly, lastS, 13,
+    [[-9,-9,'end'],[-9,17,'end'],[9,-9,'start'],[9,17,'start'],[-9,30,'end'],[9,30,'start'],
+     [-9,-21,'end'],[9,-21,'start']], B)
+    || {x:lx-9, y:ly-9, anchor:'end'};
+  lbls+=svgChip(lp.x, lp.y, lastS, 13, lp.anchor)+
+    '<text x="'+lp.x.toFixed(1)+'" y="'+lp.y.toFixed(1)+'" text-anchor="'+lp.anchor+
+      '" font-size="13" font-weight="700" fill="#0f6e56">'+lastS+'</text>';
+  placed.push(svgBox(lp.x, lp.y, lastS, 13, lp.anchor));
+  /* 末点标记本身也不许被别的标签盖住：白底垫是白色的，盖上去等于把当前体重
+     这个点抹掉。所以在这里把它占进盘里（放在最新体重标签之后 —— 标签自己
+     当然允许贴着这个点写）。 */
+  placed.push({x0:lx-6.5, y0:ly-6.5, x1:lx+6.5, y1:ly+6.5});
   /* 截止目标计划线：当前体重 → 截止日的目标点（红虚线 + 端点标记） */
-  var goalSeg='';
+  var goalLine='', marks='';
   if(gEnd){
     var x0=X(pts[pts.length-1][0]).toFixed(1), y0=Y(pts[pts.length-1][2]).toFixed(1);
     var x1=X(gEnd.d).toFixed(1), y1=Y(gEnd.w).toFixed(1);
     var gtX=Math.min(W-PR,+x1), gtS='截止目标 '+gEnd.w+'kg · '+gEnd.d.slice(5);
-    /* 这段字最长（例：截止目标 80kg · 09-19），最容易和「最新体重」挤在一起，
-       所以它也走避让：默认贴在目标点上方，压住了就换下方 / 再往外挪 */
+    /* 这段字最长（例：截止目标 80kg · 09-19），最容易和「最新体重」挤在一起。
+       默认贴在目标点上方，撞上别的字（含末点标记）就换下方、再往外挪；
+       ±12/18 起步是为了让白底垫别啃掉自己那个红端点。 */
     var gl=svgSlot(placed, gtX, +y1, gtS, 11,
-      [[0,-8,'end'],[0,16,'end'],[0,-22,'end'],[0,30,'end']], B) || {x:gtX, y:+y1-8, anchor:'end'};
-    goalSeg='<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y1+'" stroke="#A32D2D" stroke-dasharray="3 4" stroke-width="2"/>'+
-      '<circle cx="'+x1+'" cy="'+y1+'" r="4.5" fill="#A32D2D"><title>截止目标 '+gEnd.d+' '+gEnd.w+'kg</title></circle>'+
+      [[0,-12,'end'],[0,18,'end'],[0,-24,'end'],[0,30,'end'],[0,-36,'end'],[0,42,'end']], B)
+      || {x:gtX, y:+y1-12, anchor:'end'};
+    goalLine='<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y1+'" stroke="#A32D2D" stroke-dasharray="3 4" stroke-width="2"/>';
+    marks+='<circle cx="'+x1+'" cy="'+y1+'" r="4.5" fill="#A32D2D"><title>截止目标 '+gEnd.d+' '+gEnd.w+'kg</title></circle>';
+    lbls+=svgChip(gl.x, gl.y, gtS, 11, gl.anchor)+
       '<text x="'+gl.x.toFixed(1)+'" y="'+gl.y.toFixed(1)+'" text-anchor="'+gl.anchor+'" font-size="11" font-weight="700" fill="#A32D2D">'+gtS+'</text>';
     placed.push(svgBox(gl.x, gl.y, gtS, 11, gl.anchor));
   }
-  /* Y 轴数字刻度：4 条网格线 + kg 值标签 */
-  /* 最新体重数字（2026-09-17）：标在最后一个数据点旁，一眼看到当前体重。
-     候选位置按「离点最近、最不容易压线」排：左上 → 左下 → 右上 → 右下 → 更远。
-     靠左/靠顶（候选会出画布）时 svgSlot 自动跳过，等于原来的自动换边；
-     撞上别的标签（例如「截止目标」）也会自动换位 —— 这是要修的那个遮挡。
-     白描边保留：压在网格线或折线上照样看得清。 */
-  var lastP=pts[pts.length-1], lx=+X(lastP[0]).toFixed(1), ly=+Y(lastP[2]).toFixed(1);
-  var lastS=lastP[2]+'kg';
-  var lp=svgSlot(placed, lx, ly, lastS, 13,
-    [[-9,-9,'end'],[-9,17,'end'],[9,-9,'start'],[9,17,'start'],[-9,30,'end'],[9,30,'start'],[-9,-21,'end'],[9,-21,'start']], B)
-    || {x:lx-9, y:ly-9, anchor:'end'};
-  var lastTag='<circle cx="'+lx+'" cy="'+ly+'" r="4.8" fill="#0f6e56" stroke="#fff" stroke-width="1.8"/>'+
-    '<text x="'+lp.x.toFixed(1)+'" y="'+lp.y.toFixed(1)+'" text-anchor="'+lp.anchor+
-      '" font-size="13" font-weight="700" fill="#0f6e56" stroke="#ffffff" stroke-width="3" paint-order="stroke">'+
-      lastS+'</text>';
+  marks+='<circle cx="'+lx+'" cy="'+ly+'" r="4.8" fill="#0f6e56" stroke="#fff" stroke-width="1.8"/>';
   var grid='';
   for(var gi=0; gi<=3; gi++){
     var gv = lo + (hi-lo)*gi/3;
@@ -395,14 +477,19 @@ function trendSVG(p){
     grid+='<line x1="'+PL+'" y1="'+gy+'" x2="'+(W-PR)+'" y2="'+gy+'" stroke="#e8eef4" stroke-width="1"/>'+
       '<text x="'+(PL-6)+'" y="'+(+gy+4)+'" text-anchor="end" font-size="10.5" fill="#94a3b8">'+gv.toFixed(1)+'</text>';
   }
+  /* 画序（自下而上，决定谁压谁）：
+     坐标轴 → 网格 → 参照虚线 → 体重折线 → 计划线
+       → 标签（白底垫 + 文字，压在所有线之上）→ 数据点标记（永远最上层）→ 日期
+     底垫必须在线的后面画，才能把穿过字的线「抹掉」。 */
   return '<svg class="chart" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg">'+
     '<line x1="'+PL+'" y1="'+PT+'" x2="'+PL+'" y2="'+(H-PB)+'" stroke="#e2e8f0"/>'+
     '<line x1="'+PL+'" y1="'+(H-PB)+'" x2="'+(W-PR)+'" y2="'+(H-PB)+'" stroke="#e2e8f0"/>'+
     grid+
-    refs2+
+    refLines+
     '<polyline points="'+pl+'" fill="none" stroke="#0f6e56" stroke-width="2.2"/>'+ dots+
-    goalSeg+
-    lastTag+
+    goalLine+
+    lbls+
+    marks+
     '<text x="'+PL+'" y="'+(H-8)+'" font-size="11" fill="#94a3b8">'+esc(pts[0][0].slice(5))+'</text>'+
     '<text x="'+(W-PR)+'" y="'+(H-8)+'" text-anchor="end" font-size="11" fill="#94a3b8">'+esc(dmax.slice(5))+'</text>'+
     '</svg>';
