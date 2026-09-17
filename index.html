@@ -302,6 +302,16 @@ function trendSVG(p){
       '<text x="'+Math.min(W-PR,+x1).toFixed(1)+'" y="'+(+y1-8).toFixed(1)+'" text-anchor="end" font-size="11" font-weight="700" fill="#A32D2D">截止目标 '+gEnd.w+'kg · '+gEnd.d.slice(5)+'</text>';
   }
   /* Y 轴数字刻度：4 条网格线 + kg 值标签 */
+  /* 最新体重数字（2026-09-17）：标在最后一个数据点旁，一眼看到当前体重。
+     点靠左/靠顶时自动换边，白描边保证压在网格线上也看得清。 */
+  var lastP=pts[pts.length-1], lx=+X(lastP[0]).toFixed(1), ly=+Y(lastP[2]).toFixed(1);
+  var lRight=((lx-9) < (PL+40));      /* 点太靠左 → 挪到右侧，免得跑出画布 */
+  var lBelow=((ly-9) < (PT+12));      /* 点太靠顶 → 挪到下方 */
+  var ltx=lRight?(lx+9):(lx-9), lty=lBelow?(ly+17):(ly-9);
+  var lastTag='<circle cx="'+lx+'" cy="'+ly+'" r="4.8" fill="#0f6e56" stroke="#fff" stroke-width="1.8"/>'+
+    '<text x="'+ltx.toFixed(1)+'" y="'+lty.toFixed(1)+'" text-anchor="'+(lRight?'start':'end')+
+      '" font-size="13" font-weight="700" fill="#0f6e56" stroke="#ffffff" stroke-width="3" paint-order="stroke">'+
+      lastP[2]+'kg</text>';
   var grid='';
   for(var gi=0; gi<=3; gi++){
     var gv = lo + (hi-lo)*gi/3;
@@ -316,6 +326,7 @@ function trendSVG(p){
     refs2+
     '<polyline points="'+pl+'" fill="none" stroke="#0f6e56" stroke-width="2.2"/>'+ dots+
     goalSeg+
+    lastTag+
     '<text x="'+PL+'" y="'+(H-8)+'" font-size="11" fill="#94a3b8">'+esc(pts[0][0].slice(5))+'</text>'+
     '<text x="'+(W-PR)+'" y="'+(H-8)+'" text-anchor="end" font-size="11" fill="#94a3b8">'+esc(dmax.slice(5))+'</text>'+
     '</svg>';
@@ -360,8 +371,9 @@ function render(){
   if(!SNAP || !SNAP.team || !SNAP.team.length){
     app.innerHTML='<div class="card"><h2>这个地址还没有数据</h2>'+
       '<p class="hint">主帅发的<b>「主教练查看链接」末尾带数据</b>（#SNP1.…），用那条链接打开即可；'+
-      '如果只发来一段 <b>SNP1.</b> 开头的码，粘到下面：</p>'+
-      '<textarea id="snapIn" placeholder="粘贴 SNP1. 开头的快照码" style="margin-top:8px"></textarea>'+
+      '短链形如 <b>…?key=tixiao-nanpai-2026</b>，带 <b>?key=</b> 打开会自动拉云端最新。<br>'+
+      '只拿到 <b>共享 key</b> 也能用 —— 把它（或 <b>SNP1.</b> 开头的码）粘到下面：</p>'+
+      '<textarea id="snapIn" placeholder="粘贴 SNP1. 开头的快照码，或共享 key（如 tixiao-nanpai-2026）" style="margin-top:8px"></textarea>'+
       '<button class="btn pri blk" style="margin-top:8px" onclick="loadSnapCode()">📥 载入快照</button>'+
       '<p class="hint" style="margin:8px 0 0">载入过后，这台设备直接打开本地址也能看到最后一次的数据。</p></div>';
     return;
@@ -670,11 +682,16 @@ function copyCode(){
 }
 function loadSnapCode(){
   var t=$('snapIn').value.trim();
+  /* 也支持只粘贴「共享 key」本身（形如 tixiao-nanpai-2026）：
+     手机上「添加到主屏幕」有时会丢掉 ?key= 参数，这时只要有 key 就能从云端拉最新，
+     不必再找主帅要一段 SNP1. 快照码 —— 少一条死路。 */
+  if(t.indexOf('SNP1.')!==0 && /^[0-9a-zA-Z_-]{6,60}$/.test(t)){ rememberKey(t); fetchCloud(t); return; }
   var m=t.match(/SNP1\.([A-Za-z0-9+/=]+)/);
-  if(!m){ flash('请粘贴 SNP1. 开头的快照码（或直接打开主帅发的链接）', true); return; }
+  if(!m){ flash('请粘贴 SNP1. 开头的快照码、或共享 key（如 tixiao-nanpai-2026）', true); return; }
   try{ SNAP=JSON.parse(b64decUtf8(m[1])); }catch(e){ flash('码解不开 —— 确认从主帅消息里完整复制', true); return; }
   if(!SNAP || !SNAP.team || !SNAP.team.length){ flash('码里没有队员数据', true); return; }
   SNAP_SRC='粘贴';
+  if(SNAP.key) rememberKey(SNAP.key);
   try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
   render();
   flash('✅ 快照已载入（'+SNAP.team.length+' 名队员）', false);
@@ -716,7 +733,7 @@ if(location.search.indexOf('__probe')>=0){
         /* 快照 v3：带评分 sc/al —— 分低=严重。肥胖乙 52 分 < 需增肌丁 61 分 < 超重丙 74 分 < 正常甲 92 分 */
         SNAP={v:3, at:'2026-09-11', key:'', team:[
           {n:'正常甲', b:'2012', p:'主攻', h:178, w:70, bmi:22.1, st:'正常', lvl:'ok',  sc:92, al:'ok',  sl:'合理', stdW:66,  hist:[['2026-09-01',178,70]], wt:[]},
-          {n:'肥胖乙', b:'2014', p:'主攻', h:175, w:82, bmi:26.8, st:'肥胖', lvl:'bad', sc:52, al:'bad', sl:'需介入', stdW:57.6, hist:[['2026-09-01',175,82],['2026-09-08',175,81]], wt:[['2026-09-07',78.5]]},
+          {n:'肥胖乙', b:'2014', p:'主攻', h:175, w:82, bmi:26.8, st:'肥胖', lvl:'bad', sc:52, al:'bad', sl:'需介入', stdW:57.6, hist:[['2026-09-01',175,82],['2026-09-08',175,81]], wt:[[weekMon(),78.5]]},
           {n:'超重丙', b:'2013', p:'副攻', h:172, w:66, bmi:22.3, st:'超重', lvl:'warn',sc:74, al:'warn', sl:'关注', stdW:60,  hist:[['2026-09-01',172,66]], wt:[]},
           {n:'需增肌丁', b:'2014', p:'接应', h:170, w:45, bmi:15.6, st:'需增肌', lvl:'low', sc:61, al:'low', sl:'需介入', stdW:52, hist:[['2026-09-01',170,45]], wt:[]}
         ]}; SNAP_SRC=''; render();
@@ -829,6 +846,42 @@ if(location.search.indexOf('__probe')>=0){
         var t2=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
         var o2=t2?JSON.parse(t2):null;
         ck('S9 代录自动回传（recs 字段仍在）', okRet && o2 && o2.recs.length===1 && o2.recs[0].w===80.5, t2?t2.slice(0,80):'空');
+
+        /* ── 只粘「共享 key」（不带 SNP1.）也要能从云端拉回来 ──
+           场景：手机上「添加到主屏幕」丢了 ?key= 参数 → 裸地址空白页；
+           这时教练只拿得到 key，必须能自救，不能再是一条死路。 */
+        SNAP=null; SNAP_SRC='';
+        try{ localStorage.removeItem(LS_SNAP); localStorage.removeItem(LS_KEY); }catch(e){}
+        render();
+        var emptyHtml=document.getElementById('app').innerHTML;
+        ck('S21 空数据页写明「粘 key 或快照码」两条出路',
+           /共享 key/.test(emptyHtml) && /SNP1\./.test(emptyHtml) && /载入快照/.test(emptyHtml));
+        var gotKey='', origFetch=window.fetch;
+        window.fetch=function(u){
+          var s=String(u);
+          if(s.indexOf('textdb.online/')>=0 && s.indexOf('-ret')<0 && s.indexOf('/update')<0){
+            gotKey=s.split('textdb.online/')[1];
+          }
+          return Promise.resolve({
+            text:function(){ return Promise.resolve(JSON.stringify({v:3, at:'2026-09-17', key:gotKey, team:[
+              {n:'键拉甲', b:'2014', p:'主攻', h:175, w:70, bmi:22.9, st:'正常', lvl:'ok', sc:90, al:'ok', sl:'合理',
+               stdW:66, hist:[['2026-09-01',175,70],['2026-09-12',175,69.4]], wt:[]}
+            ]})); },
+            json:function(){ return Promise.resolve({status:1}); }
+          });
+        };
+        document.getElementById('snapIn').value='tixiao-nanpai-2026';
+        loadSnapCode();
+        await wait(400);
+        window.fetch=origFetch;
+        ck('S22 粘贴共享 key → 按该 key 拉云端（不是当成快照码拒绝）',
+           gotKey==='tixiao-nanpai-2026', 'fetched='+gotKey);
+        ck('S23 拉回后正常渲染队员 + 标出最新体重',
+           /键拉甲/.test(document.getElementById('app').innerHTML) &&
+           /69\.4kg<\/text>/.test(document.getElementById('app').innerHTML));
+        ck('S24 该 key 已被记住（下次裸地址自动拉最新）', storedKey()==='tixiao-nanpai-2026', storedKey());
+        try{ localStorage.removeItem(LS_KEY); }catch(e){}     /* 别把真 key 留在探针设备上 */
+        SNAP=null; SNAP_SRC=''; try{ localStorage.removeItem(LS_SNAP); }catch(e){}
       }catch(e){ out.push('ERR '+String(e&&e.stack||e).slice(0,160)); }
       var pre=document.createElement('pre'); pre.id='probeOut'; pre.textContent=out.join('\n');
       document.body.appendChild(pre);
