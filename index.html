@@ -263,6 +263,51 @@ function sortedTeam(){
 /* 选中人：会话内记住（sessionStorage）—— 每次新打开链接默认回到 陶梓乐 */
 function selName(){ try{ return sessionStorage.getItem('yf_coach_sel')||''; }catch(e){ return ''; } }
 function setSelName(n){ try{ sessionStorage.setItem('yf_coach_sel', n); }catch(e){} }
+/* ── 图表文字避让（2026-09-17）────────────────────────────────────────
+   体重图上最多有 5 处文字可能互相压住：Y 轴刻度 / 日期 / 位置标准 / 本周目标 /
+   截止目标 / 最新体重。SVG 里量不到真实文字宽度，只能自己估：
+   全角按 1.0em、数字 0.58em、拉丁字母 0.56em、空格 0.30em。
+   放每个标签时先算出候选位置的矩形，挑第一个「不与已放好的标签相交」的；
+   实在都相交，就取重叠面积最小的那个。这样数据怎么变都不会糊成一团。
+   （电脑端工具箱 youthfit.html 的 weightTrendSVG 用的是同一套，改一处要同步另一处） */
+function svgTextW(s, fs){
+  s=String(s); var w=0;
+  for(var i=0;i<s.length;i++){
+    var c=s.charCodeAt(i);
+    if(c>0x2e80) w+=1.0;                             /* 中日韩全角 */
+    else if(c>=48&&c<=57) w+=0.58;                   /* 数字 */
+    else if((c>=65&&c<=90)||(c>=97&&c<=122)) w+=0.56;/* 拉丁字母 */
+    else if(c===32) w+=0.30;                         /* 空格 */
+    else w+=0.45;                                    /* · . % 等 */
+  }
+  return w*fs;
+}
+/* 文字（基线在 x,y）→ 包围盒；四周各留 1.5px —— 最新体重那枚带 3px 白描边，比字本身宽 */
+function svgBox(x, y, s, fs, anchor){
+  var w=svgTextW(s,fs);
+  var x0=(anchor==='end')?(x-w):(anchor==='middle'?(x-w/2):x);
+  return {x0:x0-1.5, x1:x0+w+1.5, y0:y-fs*0.82-1.5, y1:y+fs*0.26+1.5};
+}
+function svgOverlap(a, b){
+  var w=Math.min(a.x1,b.x1)-Math.max(a.x0,b.x0), h=Math.min(a.y1,b.y1)-Math.max(a.y0,b.y0);
+  return (w>0&&h>0)?w*h:0;
+}
+/* cands = [[dx,dy,anchor],…] 按优先级排列；返回 {x,y,anchor}；
+   所有候选都出画布时返回 null，由调用方兜底。B = {L:左,R:右,H:高}（viewBox 坐标） */
+function svgSlot(placed, x, y, s, fs, cands, B){
+  var best=null, bestOv=Infinity;
+  for(var i=0;i<cands.length;i++){
+    var cx=x+cands[i][0], cy=y+cands[i][1], an=cands[i][2]||'end';
+    var bx=svgBox(cx,cy,s,fs,an);
+    if(bx.x0<B.L-1 || bx.x1>B.R+4) continue;        /* 出画布 → 这个候选不要 */
+    if(bx.y0<2 || bx.y1>B.H-3) continue;
+    var ov=0;
+    for(var j=0;j<placed.length;j++) ov+=svgOverlap(bx, placed[j]);
+    if(ov===0) return {x:cx, y:cy, anchor:an};
+    if(ov<bestOv){ bestOv=ov; best={x:cx, y:cy, anchor:an}; }
+  }
+  return best;
+}
 /* 体重趋势 SVG：实线=体重，虚线=位置标准体重 / 本周目标；
    设了截止目标 → 再画一条「计划线」：从当前体重连到截止日期的目标点，图上直接看到目标与期限 —— 详情卡的主视图 */
 function trendSVG(p){
@@ -282,36 +327,67 @@ function trendSVG(p){
   if(gEnd) refs.push(gEnd.w);
   var lo=Math.min.apply(null, ws.concat(refs)), hi=Math.max.apply(null, ws.concat(refs));
   var pad=(hi-lo)||2; lo-=pad*0.18; hi+=pad*0.18;
+  /* 文字占位盘：先把「位置固定、从不挪动」的 Y 轴刻度与日期标签占进去，
+     之后放「位置可调」的标签时用它挑空位（见 svgSlot） */
+  var B={L:PL, R:W-PR, H:H};
+  var placed=[];
+  for(var gi0=0; gi0<=3; gi0++){
+    var gv0=lo+(hi-lo)*gi0/3;
+    placed.push(svgBox(PL-6, Y(gv0)+4, gv0.toFixed(1), 10.5, 'end'));
+  }
+  placed.push(svgBox(PL, H-8, pts[0][0].slice(5), 11, 'start'));
+  placed.push(svgBox(W-PR, H-8, dmax.slice(5), 11, 'end'));
   var pl='', dots='';
   pts.forEach(function(p2){
     pl+=(pl?' ':'')+X(p2[0]).toFixed(1)+','+Y(p2[2]).toFixed(1);
     dots+='<circle cx="'+X(p2[0]).toFixed(1)+'" cy="'+Y(p2[2]).toFixed(1)+'" r="3.2" fill="#0f6e56"><title>'+esc(p2[0])+' '+p2[2]+'kg</title></circle>';
   });
   var refs2='';
-  if(STD) refs2+='<line x1="'+PL+'" y1="'+Y(STD).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(STD).toFixed(1)+'" stroke="#BA7517" stroke-dasharray="6 4" stroke-width="1.4"/>'+
-    '<text x="'+(W-PR)+'" y="'+(Y(STD)-5).toFixed(1)+'" text-anchor="end" font-size="11" fill="#BA7517">位置标准 '+STD+'kg</text>';
-  if(wtc) refs2+='<line x1="'+PL+'" y1="'+Y(wtc).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(wtc).toFixed(1)+'" stroke="#A32D2D" stroke-dasharray="6 4" stroke-width="1.4"/>'+
-    '<text x="'+(W-PR)+'" y="'+(Y(wtc)+13).toFixed(1)+'" text-anchor="end" font-size="11" fill="#A32D2D">本周目标 '+wtc+'kg</text>';
+  if(STD){
+    var stS='位置标准 '+STD+'kg', stY=Y(STD)-5;
+    refs2+='<line x1="'+PL+'" y1="'+Y(STD).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(STD).toFixed(1)+'" stroke="#BA7517" stroke-dasharray="6 4" stroke-width="1.4"/>'+
+      '<text x="'+(W-PR)+'" y="'+stY.toFixed(1)+'" text-anchor="end" font-size="11" fill="#BA7517">'+stS+'</text>';
+    placed.push(svgBox(W-PR, stY, stS, 11, 'end'));
+  }
+  if(wtc){
+    var wtS='本周目标 '+wtc+'kg';
+    /* 先试「线下方」（原位置），压住了换「线上方」，再压就往外挪一圈 */
+    var sl=svgSlot(placed, W-PR, Y(wtc), wtS, 11,
+      [[0,13,'end'],[0,-5,'end'],[0,26,'end'],[0,-18,'end']], B) || {x:W-PR, y:Y(wtc)+13, anchor:'end'};
+    refs2+='<line x1="'+PL+'" y1="'+Y(wtc).toFixed(1)+'" x2="'+(W-PR)+'" y2="'+Y(wtc).toFixed(1)+'" stroke="#A32D2D" stroke-dasharray="6 4" stroke-width="1.4"/>'+
+      '<text x="'+sl.x.toFixed(1)+'" y="'+sl.y.toFixed(1)+'" text-anchor="'+sl.anchor+'" font-size="11" fill="#A32D2D">'+wtS+'</text>';
+    placed.push(svgBox(sl.x, sl.y, wtS, 11, sl.anchor));
+  }
   /* 截止目标计划线：当前体重 → 截止日的目标点（红虚线 + 端点标记） */
   var goalSeg='';
   if(gEnd){
     var x0=X(pts[pts.length-1][0]).toFixed(1), y0=Y(pts[pts.length-1][2]).toFixed(1);
     var x1=X(gEnd.d).toFixed(1), y1=Y(gEnd.w).toFixed(1);
+    var gtX=Math.min(W-PR,+x1), gtS='截止目标 '+gEnd.w+'kg · '+gEnd.d.slice(5);
+    /* 这段字最长（例：截止目标 80kg · 09-19），最容易和「最新体重」挤在一起，
+       所以它也走避让：默认贴在目标点上方，压住了就换下方 / 再往外挪 */
+    var gl=svgSlot(placed, gtX, +y1, gtS, 11,
+      [[0,-8,'end'],[0,16,'end'],[0,-22,'end'],[0,30,'end']], B) || {x:gtX, y:+y1-8, anchor:'end'};
     goalSeg='<line x1="'+x0+'" y1="'+y0+'" x2="'+x1+'" y2="'+y1+'" stroke="#A32D2D" stroke-dasharray="3 4" stroke-width="2"/>'+
       '<circle cx="'+x1+'" cy="'+y1+'" r="4.5" fill="#A32D2D"><title>截止目标 '+gEnd.d+' '+gEnd.w+'kg</title></circle>'+
-      '<text x="'+Math.min(W-PR,+x1).toFixed(1)+'" y="'+(+y1-8).toFixed(1)+'" text-anchor="end" font-size="11" font-weight="700" fill="#A32D2D">截止目标 '+gEnd.w+'kg · '+gEnd.d.slice(5)+'</text>';
+      '<text x="'+gl.x.toFixed(1)+'" y="'+gl.y.toFixed(1)+'" text-anchor="'+gl.anchor+'" font-size="11" font-weight="700" fill="#A32D2D">'+gtS+'</text>';
+    placed.push(svgBox(gl.x, gl.y, gtS, 11, gl.anchor));
   }
   /* Y 轴数字刻度：4 条网格线 + kg 值标签 */
   /* 最新体重数字（2026-09-17）：标在最后一个数据点旁，一眼看到当前体重。
-     点靠左/靠顶时自动换边，白描边保证压在网格线上也看得清。 */
+     候选位置按「离点最近、最不容易压线」排：左上 → 左下 → 右上 → 右下 → 更远。
+     靠左/靠顶（候选会出画布）时 svgSlot 自动跳过，等于原来的自动换边；
+     撞上别的标签（例如「截止目标」）也会自动换位 —— 这是要修的那个遮挡。
+     白描边保留：压在网格线或折线上照样看得清。 */
   var lastP=pts[pts.length-1], lx=+X(lastP[0]).toFixed(1), ly=+Y(lastP[2]).toFixed(1);
-  var lRight=((lx-9) < (PL+40));      /* 点太靠左 → 挪到右侧，免得跑出画布 */
-  var lBelow=((ly-9) < (PT+12));      /* 点太靠顶 → 挪到下方 */
-  var ltx=lRight?(lx+9):(lx-9), lty=lBelow?(ly+17):(ly-9);
+  var lastS=lastP[2]+'kg';
+  var lp=svgSlot(placed, lx, ly, lastS, 13,
+    [[-9,-9,'end'],[-9,17,'end'],[9,-9,'start'],[9,17,'start'],[-9,30,'end'],[9,30,'start'],[-9,-21,'end'],[9,-21,'start']], B)
+    || {x:lx-9, y:ly-9, anchor:'end'};
   var lastTag='<circle cx="'+lx+'" cy="'+ly+'" r="4.8" fill="#0f6e56" stroke="#fff" stroke-width="1.8"/>'+
-    '<text x="'+ltx.toFixed(1)+'" y="'+lty.toFixed(1)+'" text-anchor="'+(lRight?'start':'end')+
+    '<text x="'+lp.x.toFixed(1)+'" y="'+lp.y.toFixed(1)+'" text-anchor="'+lp.anchor+
       '" font-size="13" font-weight="700" fill="#0f6e56" stroke="#ffffff" stroke-width="3" paint-order="stroke">'+
-      lastP[2]+'kg</text>';
+      lastS+'</text>';
   var grid='';
   for(var gi=0; gi<=3; gi++){
     var gv = lo + (hi-lo)*gi/3;
