@@ -53,10 +53,39 @@ footer .send[disabled]{background:#cbd5e1}
 .fxrow .fxex{color:#0f6e56}
 .fxrow .fxpr{flex:1;color:var(--mut)}
 .fxrow button{padding:3px 9px;font-size:12px;border:1px solid var(--line);background:#fff;border-radius:7px;color:var(--fg)}
+
+/* ── 全队一张表（2026-09-18）：行=动作 / 列=队员 ──────────────────
+   与电脑端 A4 打印表同源数据；手机上横向滑动看队员，首列动作名冻结。 */
+.vsw{display:flex;gap:8px;padding:9px 12px 2px}
+.vswbtn{flex:1;text-align:center;padding:9px 0;border:1px solid var(--line);border-radius:11px;
+        background:#fff;font-size:14px;color:var(--txt)}
+.vswbtn.on{background:var(--brand);color:#fff;border-color:var(--brand);font-weight:500}
+.mxwrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:8px 12px 12px}
+table.mx{border-collapse:separate;border-spacing:0;background:#fff;font-size:13px}
+table.mx th,table.mx td{border-bottom:1px solid var(--line);padding:6px 7px;white-space:nowrap}
+table.mx thead th{position:sticky;top:0;background:#f8fafc;font-size:11.5px;color:var(--mut);
+                  font-weight:500;z-index:2}
+table.mx th.mxfx,table.mx td.mxfx{position:sticky;left:0;background:#fff;z-index:1;
+  text-align:left;max-width:130px;white-space:normal;font-size:12.5px;box-shadow:1px 0 0 var(--line)}
+table.mx thead th.mxfx{background:#f8fafc;z-index:3}
+table.mx td.mxfx{font-weight:500}
+table.mx td.mxfx em{font-style:normal;font-size:10.5px;color:var(--amber);
+                    border:1px solid var(--amber-l);background:var(--amber-l);border-radius:5px;padding:0 4px}
+table.mx tr.mxseg td{background:#eef7f3;color:var(--brand);font-size:11.5px;font-weight:600;padding:4px 8px}
+table.mx tr.mxadd td.mxfx{color:var(--amber)}
+table.mx td.mxna{color:#94a3b8;text-align:center}
+table.mx td.mxcell{padding:3px 4px}
+table.mx td.mxpx,table.mx th.mxpx{color:var(--mut);font-size:12px}
+input.mxi{width:64px;padding:6px 4px;font-size:14px;text-align:center;border:1px solid var(--line);
+          border-radius:8px;background:#fff;font-family:ui-monospace,Menlo,monospace;color:#94a3b8}
+input.mxi:focus{outline:2px solid var(--brand);color:var(--txt)}
+input.mxi.filled{color:var(--txt);font-weight:600;background:var(--done);border-color:#9fd9c4}
+input.mxi.bad{color:var(--amber);border-color:var(--amber);background:var(--amber-l)}
 </style>
 </head>
 <body>
 <header><b>即训即录</b><span class="sub" id="hdr">加载中…</span></header>
+<div id="vsw" class="vsw"></div>
 <div id="tabs" class="tabs"></div>
 <div class="bar2">
   <span class="p" id="prog"></span>
@@ -220,6 +249,9 @@ function allDone(){
   toast(n? ('已标记 '+n+' 人按计划完成 '+curEx) : '该动作大家都已标记', 1600);
 }
 function render(){
+  if(VIEW==='team'){ renderTeamView(); return; }
+  var b2=document.querySelector('.bar2'); if(b2) b2.style.display='';
+  renderVsw();
   var L=exList();
   $('tabs').innerHTML=L.map(function(n){
     var done=DAY.items.filter(function(it){ return exOf(it,n) && isDone(it,n); }).length;
@@ -256,15 +288,12 @@ function render(){
   var totAll=DAY.items.filter(function(it){ return exOf(it,curEx); }).length;
   $('prog').textContent=curEx+'：'+doneAll+'/'+totAll+' 人已录';
   $('hint').textContent='点「完成」= 按计划记满全部组；少做了就点「－1 组」，重量/次数用 ± 调，或展开精修。';
-  var total=0, hit=0;
-  DAY.items.forEach(function(it){ exList().forEach(function(n){ if(exOf(it,n)){ total++; if(isDone(it,n)) hit++; } }); });
-  $('st').textContent=hit+'/'+total+' 格';
-  var openN=0; Object.keys(OPEN).forEach(function(k){ openN+=Object.keys(OPEN[k]).length; });
-  $('send').disabled=(hit===0 && openN===0);
+  updateFoot();
 }
 function reset(athId){ delete LOG[athId][curEx]; saveLocal(); render(); }
 async function send(){
   var items=DAY.items.filter(function(it){ return Object.keys(LOG[it.athId]||{}).some(function(k){ return (LOG[it.athId][k]||'').trim(); }) || Object.keys(OPEN[it.athId]||{}).length; });
+  var bad=0;   /* 填了但解析不出组数的格子数 */
   if(!items.length){ toast('还没有录入任何数据'); return; }
   $('send').disabled=true; $('send').textContent='回传中…';
   try{
@@ -272,11 +301,12 @@ async function send(){
     if(!Array.isArray(old)) old=[];
     items.forEach(function(it){
       var r=LOG[it.athId]||{}, ex=[], pr={};
-      it.ex.forEach(function(e){
-        var sets=parseTok(r[e.name]||''); if(!sets.length) return;
-        ex.push({name:e.name, plan:e.sets+'×'+e.reps, sets:sets});
+      /* 遍历「实际填了的格子」而不是 it.ex —— 全队表里热身 / 辅助 / 放松行也能回传 */
+      Object.keys(r).forEach(function(nm){
+        var sets=expandTok(r[nm], repsOfRow(nm)); if(!sets.length){ bad++; return; }
+        ex.push({name:nm, plan:planTxtOf(it, nm), sets:sets});
         var best=null; sets.forEach(function(s){ var v=est1RM(s[0],s[1]); if(v&&(!best||v>best)) best=v; });
-        if(best!=null) pr[e.name]=best;
+        if(best!=null) pr[nm]=best;
       });
       /* 自由录入（突破测试）：任何动作、任何次数，合并进同一份回传 */
       var op=OPEN[it.athId]||{};
@@ -295,10 +325,111 @@ async function send(){
     var res=await fetch(API+'/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}).then(function(r){ return r.json(); });
     if(res.status!==1) throw new Error('云端返回 '+JSON.stringify(res).slice(0,60));
     saveLocal(); render();
-    toast('✅ 已回传 '+items.length+' 人 —— 电脑端点「拉取训练记录」并入', 3000);
+    toast('✅ 已回传 '+items.length+' 人 —— 电脑端点「拉取训练记录」并入'+(bad?('（另有 '+bad+' 格不是数字，没回传）'):''), bad?4500:3000);
   }catch(e){ toast('回传失败：'+e+'（数据已存本机）', 3500); }
   $('send').disabled=false; $('send').textContent='📤 一键回传';
 }
+
+/* ══════════ 全队一张表（行=动作 / 列=队员）2026-09-18 ══════════
+ * 数据由电脑端 buildDayPlanPayload v2 下发（rows + 每人 cells），与 A4 打印表同源。
+ * 灰字 = 计划（电脑端按最近 1RM 算的）；和计划不一样就填进去，一样留空 —— 与纸表同一口径。
+ * 填格只写 LOG + 改该格样式，**不重绘**：否则横向滚动位置会跳、光标会丢，没法连着填。 */
+var VIEW='team', RI=null;
+function setView(v){ VIEW=(v==='single')?'single':'team'; render(); }
+function rowsIndex(nm){
+  if(!DAY || !DAY.rows) return -1;
+  if(!RI){ RI={}; DAY.rows.forEach(function(r,i){ RI[r.name]=i; }); }
+  var v=RI[nm]; return (v==null?-1:v);
+}
+function cellPlan(it, nm){
+  if(!it || !it.cells) return '';
+  var i=rowsIndex(nm); if(i<0) return '';
+  var v=it.cells[i]; return (v==null?'':String(v));
+}
+function repsOfRow(nm){
+  if(DAY && DAY.rows){ for(var i=0;i<DAY.rows.length;i++){ if(DAY.rows[i].name===nm) return DAY.rows[i].reps; } }
+  return '';
+}
+/* 只填重量（如 52.5）→ 用该行计划次数补齐；写 52.5x5 就按写的来 */
+function expandTok(raw, reps){
+  var t=parseTok(raw);
+  if(t.length) return t;
+  var w=num(raw); if(w==null || !(w>0)) return [];
+  var r=parseInt(String(reps==null?'':reps).replace(/[^\d]/g,''),10) || 5;
+  return [[w, r]];
+}
+function planTxtOf(it, nm){
+  var p=cellPlan(it, nm);
+  if(p) return p;
+  return String(repsOfRow(nm)||'');
+}
+function setTeamCellEl(inp){
+  var aid=inp.getAttribute('data-a'), nm=inp.getAttribute('data-e'), v=String(inp.value||'').trim();
+  LOG[aid]=LOG[aid]||{};
+  if(v) LOG[aid][nm]=v; else delete LOG[aid][nm];
+  saveLocal();
+  /* 非数字（例如写了「完成」）留得下、但回传不出去 —— 标黄，别让人以为已经录上了 */
+  var bad=(v && !expandTok(v, inp.getAttribute('data-reps')).length);
+  inp.className='mxi'+(bad?' bad':(v?' filled':''));
+  updateFoot();
+}
+function updateFoot(){
+  var filled=0, openN=0;
+  Object.keys(LOG).forEach(function(k){ filled += Object.keys(LOG[k]||{}).length; });
+  Object.keys(OPEN).forEach(function(k){ openN += Object.keys(OPEN[k]||{}).length; });
+  $('st').textContent='已填 '+filled+' 格'+(openN?(' · 自由 '+openN+' 项'):'');
+  $('send').disabled=(filled===0 && openN===0);
+}
+function escAttr(s){ return esc(String(s==null?'':s)).replace(/"/g,'&quot;'); }
+function renderVsw(){
+  var el=$('vsw'); if(!el) return;
+  el.innerHTML=
+    '<div class="vswbtn'+(VIEW==='team'?' on':'')+'" onclick="setView(\'team\')">👥 全队表</div>'+
+    '<div class="vswbtn'+(VIEW==='single'?' on':'')+'" onclick="setView(\'single\')">👤 逐人录入</div>';
+}
+function renderTeamView(){
+  renderVsw();
+  $('tabs').innerHTML='';
+  var b2=document.querySelector('.bar2'); if(b2) b2.style.display='none';   /* 逐人专用按钮，矩阵下藏起来 */
+  if(!DAY.rows || !DAY.rows.length){
+    RI=null;
+    $('app').innerHTML='<div class="empty">这张「全队表」需要电脑端重新上传一次课表（新格式）。<br><br>'+
+      'YouthFit「训练记录」页 → <b>📤 上传今日课表到手机端</b></div>';
+    $('prog').textContent=''; $('hint').textContent='';
+    updateFoot();
+    return;
+  }
+  var segName={}, segMin={};
+  (DAY.segs||[]).forEach(function(s){ segName[s.k]=s.n; segMin[s.k]=s.m; });
+  var n=DAY.items.length;
+  var head='<thead><tr><th class="mxfx">动作</th><th class="mxpx">处方</th>'+
+    DAY.items.map(function(it){ return '<th class="mxath">'+esc(it.name)+'</th>'; }).join('')+'</tr></thead>';
+  var body='';
+  DAY.rows.forEach(function(r, ri){
+    if(ri===0 || DAY.rows[ri-1].seg!==r.seg){
+      body+='<tr class="mxseg"><td colspan="'+(2+n)+'">'+esc(segName[r.seg]||r.seg)+
+        (segMin[r.seg]?(' · '+segMin[r.seg]+'′'):'')+'</td></tr>';
+    }
+    var presc=r.sets+' × '+esc(String(r.reps))+(r.pct!=null?(' @'+Math.round(r.pct*100)+'%'):'');
+    var tds=DAY.items.map(function(it){
+      var plan=cellPlan(it, r.name);
+      if(plan==='自重' || plan==='无负重') return '<td class="mxna">'+esc(plan)+'</td>';
+      if(plan==='') return '<td class="mxna">·</td>';
+      var v=(LOG[it.athId]||{})[r.name]||'';
+      return '<td class="mxcell"><input class="mxi'+(v?' filled':'')+'" type="text" inputmode="decimal"'+
+        ' data-a="'+escAttr(it.athId)+'" data-e="'+escAttr(r.name)+'" data-reps="'+escAttr(String(r.reps))+'"'+
+        ' value="'+escAttr(v)+'" placeholder="'+escAttr(plan)+'" oninput="setTeamCellEl(this)"></td>';
+    }).join('');
+    body+='<tr'+(r.add?' class="mxadd"':'')+'><td class="mxfx">'+
+      esc(String(r.name).replace(/^弱项(加练|补强) · /,''))+(r.add?' <em>加练</em>':'')+
+      '</td><td class="mxpx">'+presc+'</td>'+tds+'</tr>';
+  });
+  $('app').innerHTML='<div class="mxwrap"><table class="mx">'+head+'<tbody>'+body+'</tbody></table></div>'+openCard();
+  $('prog').textContent='已填 '+Object.keys(LOG).reduce(function(s,k){ return s+Object.keys(LOG[k]||{}).length; },0)+' 个格子';
+  $('hint').textContent='灰字 = 计划（按最近 1RM 算）· 实际不一样就填进去（52.5 或 52.5x5）· 一样留空 · 填完点下方「一键回传」。只认数字，写了别的字会标黄、不回传。';
+  updateFoot();
+}
+
 </script>
 </body>
 </html>
