@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>身体监测 · 教练端 · YouthFit</title>
+<title>教练端 · 身体监测 / 计划·实测 · YouthFit</title>
 <style>
   :root{ --ink:#1e293b; --muted:#64748b; --line:#e2e8f0; --brand:#0f6e56; --brand-bg:#eef7f3; --red:#A32D2D; --red-bg:#fcebeb; --amber:#8a5a00; --amber-bg:#faeeda; --green:#3B6D11; --green-bg:#eaf3de; }
   *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
@@ -57,16 +57,38 @@
   .chart{width:100%; height:auto; display:block;}
   .ok{color:var(--brand); font-weight:700;}
   .sep{height:1px; background:var(--line); margin:12px 0;}
+
+  /* ── 底部双图标版块切换（2026-09-18）──────────────────────────
+     「身体监测」= 本页原有内容；「计划·实测」= 同源子页 trainlog/。
+     两版块同一网址，底部图标就地切换。 */
+  body{padding-bottom:80px;}
+  #viewPlan{display:none;}
+  .planframe{display:block;width:100%;border:0;background:#f4f6f8;
+             height:calc(100vh - 80px);height:calc(100dvh - 80px);}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:99;display:flex;gap:8px;
+          background:#fff;border-top:1px solid var(--line);
+          padding:6px 8px calc(6px + env(safe-area-inset-bottom));}
+  .tbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:0;
+        background:none;font:600 11.5px/1.2 inherit;color:var(--muted);
+        padding:6px 0;border-radius:11px;cursor:pointer;}
+  .tbtn .ti{font-size:19px;line-height:1;}
+  .tbtn.on{color:var(--brand);background:var(--brand-bg);}
 </style>
 </head>
 <body>
-<div class="wrap">
+<div class="wrap" id="viewBody">
   <div class="hd">
     <h1>📏 身体监测 · 教练端</h1>
-    <p id="hdSub">与主帅端同一套算法评分（分低=需介入）：图表为主视图、团队按严重程度排序；可设每周目标（自动同步给主帅）；代录身高/体重<b>自动回传</b>（无需回传码）。</p>
+    <p id="hdSub">与主帅端同一套算法评分（分低=需介入）：图表为主视图、团队按严重程度排序；可设每周目标（自动同步给主帅）；代录身高/体重<b>自动回传</b>（无需回传码）。<br><b>底部两个图标</b>可就地切换「📋 计划·实测」与「📏 身体监测」。</p>
   </div>
   <div id="app"><div class="card"><p class="hint">加载中…</p></div></div>
 </div>
+
+<div id="viewPlan"><iframe id="planFrame" class="planframe" title="计划·实测"></iframe></div>
+<nav class="tabbar" aria-label="版块切换">
+  <button type="button" id="tabBody" class="tbtn on" onclick="setView('body')"><span class="ti">📏</span><span>身体监测</span></button>
+  <button type="button" id="tabPlan" class="tbtn" onclick="setView('plan')"><span class="ti">📋</span><span>计划·实测</span></button>
+</nav>
 
 <script>
 /* ══════════ 身体监测 · 主教练端（与 YouthFit 身体监测页同口径）══════════
@@ -1052,6 +1074,45 @@ if(location.search.indexOf('__probe')>=0){
     })();
   })();
 }
+
+/* ══════════ 底部双版块切换（2026-09-18）══════════
+ * 「计划·实测」用同源 iframe 复用 trainlog/ 那套已经跑通的即训即录：
+ *   · 共用同一个 key（URL 的 ?key= → 其次是本机记住的 → 最后才是快照里的）
+ *   · 懒加载：不点不请求，身体监测版块的首屏速度不受影响
+ *   · hash 只在「不含 SNP 快照码」时写 #plan，避免冲掉主帅发的长快照链接
+ */
+var VIEW='body';
+/* 布局兼容：本地工具箱里本页在 /share/ 下、手机页在同级 trainlog/；
+   云端与 Pages 的发布包里两页同在根目录（index.html + trainlog/index.html）。
+   相对推导两边都通；绝对路径 /trainlog/ 在 Pages 子路径下会断，不能用。 */
+function planFrameBase(){
+  return /\/share\/[^/]*$/.test(location.pathname) ? '../trainlog/index.html' : 'trainlog/index.html';
+}
+function planFrameSrc(){
+  var k=KEY_PARAM||storedKey()||(SNAP&&SNAP.key)||'';
+  return planFrameBase()+(k?('?key='+encodeURIComponent(k)):'');
+}
+function setView(v){
+  VIEW=(v==='plan')?'plan':'body';
+  var vb=$('viewBody'), vp=$('viewPlan'), tb=$('tabBody'), tp=$('tabPlan');
+  if(vb) vb.style.display=(VIEW==='body')?'':'none';
+  if(vp) vp.style.display=(VIEW==='plan')?'block':'none';
+  if(tb) tb.className='tbtn'+(VIEW==='body'?' on':'');
+  if(tp) tp.className='tbtn'+(VIEW==='plan'?' on':'');
+  if(VIEW==='plan'){
+    var f=$('planFrame');
+    if(f && !f.getAttribute('src')) f.setAttribute('src', planFrameSrc());
+  }
+  window.scrollTo(0,0);
+  try{
+    if((location.hash||'').indexOf('SNP')!==0){
+      history.replaceState(null,'',location.pathname+location.search+(VIEW==='plan'?'#plan':''));
+    }
+  }catch(e){}
+}
+/* 手机上加在桌面主屏后直接进「计划·实测」：链接尾巴带 #plan 即可 */
+(function(){ try{ if((location.hash||'')==='#plan') setView('plan'); }catch(e){} })();
+
 </script>
 </body>
 </html>
