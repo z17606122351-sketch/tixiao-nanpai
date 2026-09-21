@@ -825,15 +825,20 @@ async function pushPayload(extra, silent){
   var payload={v:2, at:todayStr(), recs:ENT.recs, goals:(extra&&extra.goals)||allLocalGoals(), fb:(extra&&extra.fb)||((function(){ var k=Object.keys(FB); return k.length?allLocalFb():null; })())};
   try{
     var body='key='+encodeURIComponent(rk)+'&value='+encodeURIComponent(JSON.stringify(payload));
-    var r=await fetch('https://textdb.online/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});
+    var r=await fetchTO('https://textdb.online/update',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body}, NET_TO_POST_MS);
     var j=await r.json();
     if(j.status===1){
       ENT.recs.forEach(function(x){ x.sent=1; }); persistEnt(); RET_AT=todayStr(); render();
-      if(!silent) flash('✅ 已回传给主帅（代录 '+payload.recs.length+' 条 · 截止目标 '+payload.goals.length+' 条）—— 他打开身体监测页自动合并', false);
+      if(!silent){ hideNetFail(); flash('✅ 已回传给主帅（代录 '+payload.recs.length+' 条 · 截止目标 '+payload.goals.length+' 条）—— 他打开身体监测页自动合并', false); }
       return true;
     }
     if(!silent) flash('回传失败：'+JSON.stringify(j).slice(0,80), true);
-  }catch(e){ if(!silent) flash('回传失败：'+e, true); }
+  }catch(e){
+    if(!silent){
+      flash('回传失败：'+e, true);
+      netFail('回传给主帅失败：'+e+'（记录仍在本机，可重试）', function(){ pushPayload(extra, silent); });
+    }
+  }
   return false;
 }
 /* 全部本机设过的目标（用于「立即回传」兜底，主帅端按指纹去重不会重复刷） */
@@ -881,6 +886,51 @@ function loadSnapCode(){
   render();
   flash('✅ 快照已载入（'+SNAP.team.length+' 名队员）', false);
 }
+/* ══════════ 网络超时与失败重试（2026-09-21 补）══════════
+ * 为什么补：弱网下 fetch 会无限期挂住 —— 页面一直转圈，既不给失败提示，也没有重试入口。
+ * 手机端最要命：队员在训练场提交后不知道自己到底提没提上去。这里给每个请求设上限：
+ * 超时或网络错误一律抛错，由调用方弹「可见」提示 + 「重试」按钮（不能只 console.error）。
+ * 没有 AbortController 的老浏览器退回普通 fetch —— 保持原行为，不额外制造失败。 */
+var NET_TO_MS = 10000;        /* 读：10 秒 */
+var NET_TO_POST_MS = 20000;   /* 写：20 秒（弱网下单次上传体较大） */
+function fetchTO(url, opts, ms){
+  opts = opts || {}; ms = ms || NET_TO_MS;
+  if(typeof AbortController === 'undefined') return fetch(url, opts);
+  var ac = new AbortController(), timedOut = false;
+  var tm = setTimeout(function(){ timedOut = true; ac.abort(); }, ms);
+  var o = {}; for(var k in opts) o[k] = opts[k];
+  o.signal = ac.signal;
+  return fetch(url, o).then(function(r){ clearTimeout(tm); return r; }, function(e){
+    clearTimeout(tm);
+    if(timedOut) throw new Error('请求超时（'+(ms/1000)+' 秒无响应）');
+    throw e;
+  });
+}
+/* 常驻错误条：不同于 flash/toast 的 2 秒自动消失 —— 网络坏了必须让人看见，并且有路可走 */
+function netFail(msg, retryFn){
+  if(typeof document === 'undefined') return;
+  var el = document.getElementById('netErrBar');
+  if(!el){
+    el = document.createElement('div'); el.id = 'netErrBar';
+    el.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:16px;max-width:92vw;z-index:2147483647;display:flex;gap:10px;align-items:center;padding:10px 14px;border-radius:12px;background:#A32D2D;color:#fff;font-size:13.5px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.3)';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<span>⚠ '+esc(msg)+'</span>';
+  if(retryFn){
+    var b = document.createElement('button'); b.type='button'; b.textContent='重试';
+    b.style.cssText = 'flex:0 0 auto;background:#fff;color:#A32D2D;border:0;border-radius:8px;padding:5px 12px;font-weight:800';
+    b.onclick = function(){ hideNetFail(); retryFn(); };
+    el.appendChild(b);
+  }
+  var x = document.createElement('button'); x.type='button'; x.textContent='✕';
+  x.style.cssText = 'flex:0 0 auto;background:transparent;color:#fff;border:0;font-size:15px';
+  x.onclick = hideNetFail;
+  el.appendChild(x);
+}
+function hideNetFail(){
+  if(typeof document === 'undefined') return;
+  var el = document.getElementById('netErrBar'); if(el) el.remove();
+}
 function flash(msg,isErr){
   var el=$('flashBar');
   if(!el){ el=document.createElement('div'); el.id='flashBar';
@@ -892,14 +942,18 @@ function flash(msg,isErr){
 }
 function fetchCloud(k){
   var app=$('app'); if(app) app.innerHTML='<div class="card"><p class="hint">正在从云端读取最新数据…</p></div>';
-  fetch('https://textdb.online/'+k).then(function(r){ return r.text(); }).then(function(t){
+  fetchTO('https://textdb.online/'+k, null, NET_TO_MS).then(function(r){ return r.text(); }).then(function(t){
     if(!t){ flash('云端还没有数据 —— 主帅在电脑上打开「身体监测」会自动上传', true); render(); return; }
     try{ SNAP=JSON.parse(t); }catch(e){ flash('云端数据解析失败', true); render(); return; }
     SNAP_SRC='云端';
     if(SNAP.key) rememberKey(SNAP.key);
     try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
+    hideNetFail();
     render();
-  }).catch(function(e){ flash('云端读取失败：'+e, true); render(); });
+  }).catch(function(e){
+    flash('云端读取失败：'+e, true); render();
+    netFail('读取云端数据失败：'+e+'（下面显示的是本机缓存）', function(){ fetchCloud(k); });
+  });
 }
 render();
 var k0 = KEY_PARAM || storedKey();
@@ -969,7 +1023,7 @@ if(location.search.indexOf('__probe')>=0){
         SNAP.key=KEYSAVE;
         saveGoal('肥胖乙');
         await wait(700);
-        var t3=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var t3=await fetchTO('https://textdb.online/'+SNAP.key+'-ret', null, NET_TO_MS).then(function(r){ return r.text(); });
         var o3=t3?JSON.parse(t3):null;
         ck('S14 设截止目标 → 随 <key>-ret 上云（goals 字段）',
            o3 && o3.goals && o3.goals.length===1 && o3.goals[0].n==='肥胖乙' && o3.goals[0].t===57.6 && o3.goals[0].by==='2026-12-31',
@@ -998,7 +1052,7 @@ if(location.search.indexOf('__probe')>=0){
         SNAP.key=KEYSAVE;
         saveFb('主攻');
         await wait(700);
-        var t4=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var t4=await fetchTO('https://textdb.online/'+SNAP.key+'-ret', null, NET_TO_MS).then(function(r){ return r.text(); });
         var o4=t4?JSON.parse(t4):null;
         ck('S18 保存反馈 → 随 <key>-ret 上云（fb 字段：手段+画像）',
            o4 && o4.fb && o4.fb.means && o4.fb.means['主攻'] && o4.fb.means['主攻'].spike===3 &&
@@ -1016,7 +1070,7 @@ if(location.search.indexOf('__probe')>=0){
         SNAP.key=KEYSAVE;
         saveFbP('陶梓乐','主攻');
         await wait(700);
-        var t5=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var t5=await fetchTO('https://textdb.online/'+SNAP.key+'-ret', null, NET_TO_MS).then(function(r){ return r.text(); });
         var o5=t5?JSON.parse(t5):null;
         ck('S20 保存个人反馈 → fb.player（姓名键：手段+画像）',
            o5 && o5.fb && o5.fb.player && o5.fb.player['陶梓乐'] &&
@@ -1028,7 +1082,7 @@ if(location.search.indexOf('__probe')>=0){
         persistEnt();
         var okRet=await pushRet(true);
         await wait(600);
-        var t2=await fetch('https://textdb.online/'+SNAP.key+'-ret').then(function(r){ return r.text(); });
+        var t2=await fetchTO('https://textdb.online/'+SNAP.key+'-ret', null, NET_TO_MS).then(function(r){ return r.text(); });
         var o2=t2?JSON.parse(t2):null;
         ck('S9 代录自动回传（recs 字段仍在）', okRet && o2 && o2.recs.length===1 && o2.recs[0].w===80.5, t2?t2.slice(0,80):'空');
 
