@@ -188,11 +188,15 @@ function openCard(){
   '</div>';
 }
 fetch(API+'/'+encodeURIComponent(KEY)+'-day').then(function(r){ return r.text(); }).then(function(t){
-  if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>请在 YouthFit「训练记录」页点<br><b>📤 上传今日课表到手机端</b></div>'; $('send').disabled=true; return; }
+  if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>打开电脑端 YouthFit 就会<b>自动上传</b>今日课表（每天首次打开自动推一次）<br>推完后刷新本页即可</div>'; $('send').disabled=true; return; }
   DAY=JSON.parse(t); loadLocal();
-  $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day;
+  /* 拿到 ≠ 是今天的：旧日期的课表要显眼告警，否则教练照着旧重量练还不知道 */
+  var stale=(DAY.at!==todayStr());
+  $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day+(stale?' · <b style="color:#EF9F27">⚠ 非今日</b>':'');
   var L=exList(); if(!curEx||L.indexOf(curEx)<0) curEx=L[0];
   render();
+  /* 只有「能渲染出全队表」时才加这层日期告警；旧格式课表下面那句空态已经说清楚了，别叠两层 */
+  if(stale && DAY.rows && DAY.rows.length) $('app').innerHTML='<div class="empty" style="border-color:#EF9F27;background:#FAEEDA;color:#854F0B">⚠️ 这份课表是 <b>'+esc(DAY.at)+'</b> 的，不是今天（'+todayStr()+'）。<br>打开电脑端 YouthFit 会自动上传今日课表，然后刷新本页。</div>'+$('app').innerHTML;
 }).catch(function(e){
   $('hdr').textContent='网络异常';
   $('app').innerHTML='<div class="empty">读取课表失败：'+esc(e)+'<br><br>检查网络后刷新</div>';
@@ -393,8 +397,8 @@ function renderTeamView(){
   var b2=document.querySelector('.bar2'); if(b2) b2.style.display='none';   /* 逐人专用按钮，矩阵下藏起来 */
   if(!DAY.rows || !DAY.rows.length){
     RI=null;
-    $('app').innerHTML='<div class="empty">这张「全队表」需要电脑端重新上传一次课表（新格式）。<br><br>'+
-      'YouthFit「训练记录」页 → <b>📤 上传今日课表到手机端</b></div>';
+    $('app').innerHTML='<div class="empty">云端这份课表还是旧格式（缺「全队表」数据）。<br><br>'+
+      '打开电脑端 YouthFit 会自动推送新格式课表<br>（每天首次打开自动推一次）→ 推完刷新本页即可。</div>';
     $('prog').textContent=''; $('hint').textContent='';
     updateFoot();
     return;
