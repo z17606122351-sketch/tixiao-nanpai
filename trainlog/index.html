@@ -209,14 +209,55 @@ function hideNetFail(){
 }
 
 /* 课表加载抽成函数：超时/失败时给「重试」按钮再跑一遍（原来只能靠人自己刷新页面） */
+/* ══ 双源取数（2026-11-25 新增）══════════════════════════════════════
+ * 与主页 index.html 同一套逻辑：教练端常在训练馆用移动网络，textdb.online
+ * 在部分运营商网络上连不上 → 课表读不到。Pages 同源目录 data/<key>-day.json
+ * 是云端数据的定时镜像，连不上云端时自动回退。
+ * 注意：trainlog 页在 Pages 上位于 /tixiao-nanpai/trainlog/，镜像在上级 ../data/。 */
+var MIRROR_DIRS=['../data/','data/','/tixiao-nanpai/data/'];
+function mirrorUrls(k){
+  var out=[],i;
+  for(i=0;i<MIRROR_DIRS.length;i++) out.push(MIRROR_DIRS[i]+encodeURIComponent(k)+'.json');
+  return out;
+}
+function fetchMirror(k, ms){
+  var urls=mirrorUrls(k);
+  function tryOne(i){
+    if(i>=urls.length) return Promise.reject(new Error('同源镜像不存在'));
+    return fetchTO(urls[i], null, ms).then(function(r){
+      if(!r || !r.ok) return tryOne(i+1);
+      return r.text();
+    }).then(function(t){
+      if(!t || !t.trim()) return tryOne(i+1);
+      return t;
+    }).catch(function(e){
+      if(i+1>=urls.length) throw e;
+      return tryOne(i+1);
+    });
+  }
+  return tryOne(0);
+}
+/* 云端优先、镜像兜底；写入（回传）仍只走云端，避免数据分叉 */
+function fetchDual(k, msCloud){
+  msCloud=msCloud||NET_TO_MS;
+  var cloudP=fetchTO(API+'/'+encodeURIComponent(k), null, msCloud).then(function(r){ return r.text(); }).catch(function(){ return ''; });
+  var mirrorP=fetchMirror(k, Math.min(msCloud, 8000)).catch(function(){ return ''; });
+  return Promise.all([cloudP, mirrorP]).then(function(res){
+    if(res[0] && res[0].trim()) return {body:res[0], src:'云端'};
+    if(res[1] && res[1].trim()) return {body:res[1], src:'镜像'};
+    return {body:'', src:''};
+  });
+}
 function loadDay(){
   $('hdr').textContent='正在读取今日课表…';
-  fetchTO(API+'/'+encodeURIComponent(KEY)+'-day', null, NET_TO_MS).then(function(r){ return r.text(); }).then(function(t){
+  fetchDual(KEY+'-day', NET_TO_MS).then(function(res){
+  var t=res.body;
   if(!t){ $('hdr').textContent='云端无今日课表'; $('app').innerHTML='<div class="empty">电脑端还没上传今日课表<br><br>打开电脑端 YouthFit 就会<b>自动上传</b>今日课表（每天首次打开自动推一次）<br>推完后刷新本页即可</div>'; $('send').disabled=true; return; }
   DAY=JSON.parse(t); loadLocal(); $('send').disabled=false; hideNetFail();
+  if(res.src==='镜像'){ $('hdr').textContent='📦 镜像课表（云端连不上）'; }
   /* 拿到 ≠ 是今天的：旧日期的课表要显眼告警，否则教练照着旧重量练还不知道 */
   var stale=(DAY.at!==todayStr());
-  $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day+(stale?' · <b style="color:#EF9F27">⚠ 非今日</b>':'');
+  if(res.src!=='镜像') $('hdr').innerHTML=esc(DAY.at)+' · 周'+DAY.day+(stale?' · <b style="color:#EF9F27">⚠ 非今日</b>':'');
   render();
   /* 只有「能渲染出全队表」时才加这层日期告警；旧格式课表下面那句空态已经说清楚了，别叠两层 */
   if(stale && DAY.rows && DAY.rows.length) $('app').innerHTML='<div class="empty" style="border-color:#EF9F27;background:#FAEEDA;color:#854F0B">⚠️ 这份课表是 <b>'+esc(DAY.at)+'</b> 的，不是今天（'+todayStr()+'）。<br>打开电脑端 YouthFit 会自动上传今日课表，然后刷新本页。</div>'+$('app').innerHTML;

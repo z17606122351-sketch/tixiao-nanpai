@@ -1,0 +1,70 @@
+name: sync-mirror
+
+# 把云端 textdb.online 的数据定时同步成 Pages 同源镜像（data/*.json）。
+# 为什么需要：教练端在训练馆/校园常用手机移动网络，textdb.online（Cloudflare .online
+# 域名）在部分运营商网络上连不上，页面会弹「读取云端数据失败」。Pages 域名在境内稳定，
+# 页面改成「云端优先 → 同源镜像兜底」后，移动网络也能读到数据。
+#
+# 写入（回传）仍只走云端：镜像只读，避免两份数据互相覆盖造成分叉。
+
+on:
+  schedule:
+    - cron: '17,47 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-mirror
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fetch cloud data into data/
+        env:
+          KEYS: 'tixiao-nanpai-2026 tixiao-nanpai-2026-ret tixiao-nanpai-2026-day tixiao-nanpai-2026-log'
+        run: |
+          set -u
+          mkdir -p data
+          failed=0
+          for k in $KEYS; do
+            code=$(curl -sS -m 30 -w '%{http_code}' -o "data/$k.json.tmp" "https://textdb.online/$k" || echo "000")
+            if [ "$code" != "200" ]; then
+              echo "::warning::fetch $k failed (HTTP $code) — 保留旧镜像"
+              rm -f "data/$k.json.tmp"
+              failed=1
+              continue
+            fi
+            # 空文件（如 -log 还没有内容）不覆盖已有镜像
+            if [ ! -s "data/$k.json.tmp" ]; then
+              echo "::warning::$k returned empty — 保留旧镜像"
+              rm -f "data/$k.json.tmp"
+              continue
+            fi
+            mv "data/$k.json.tmp" "data/$k.json"
+            echo "synced $k ($(wc -c < "data/$k.json") bytes)"
+          done
+          rm -f data/*.tmp
+          # 至少要同步成功一个，否则本次不提交（保留上一版镜像）
+          if [ "$failed" = "1" ] && [ -z "$(git status --porcelain data)" ]; then
+            echo "::warning::nothing synced, keeping existing mirror"
+            exit 0
+          fi
+
+      - name: Commit if changed
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data
+          if git diff --staged --quiet; then
+            echo 'mirror already up to date'
+            exit 0
+          fi
+          git commit -m "chore: sync cloud data mirror ($(date -u '+%Y-%m-%d %H:%M UTC'))"
+          git push

@@ -585,6 +585,8 @@ function render(){
   if(cur) setSelName(cur.n);
   var banner = SNAP_SRC==='云端'
     ? '☁ <b>云端最新数据</b>：'+esc(SNAP.at||'')+' · '+SNAP.team.length+' 名队员 —— 主帅上传后这里自动就是最新。'
+    : SNAP_SRC==='镜像'
+    ? '📦 <b>同源镜像数据</b>：'+esc(SNAP.at||'')+' · '+SNAP.team.length+' 名队员 —— <b>当前网络连不上云端</b>，显示的是镜像副本（稍有延迟）。'
     : SNAP_SRC==='缓存'
     ? '📸 <b>上次打开时的快照</b>：'+esc(SNAP.at||'')+' —— <b>可能不是最新</b>，打开带 ?key= 的共享短链即拉最新。'
     : '📸 数据快照：<b>'+esc(SNAP.at)+'</b> · '+SNAP.team.length+' 名队员。';
@@ -940,18 +942,64 @@ function flash(msg,isErr){
   el.textContent=msg; el.style.display='block';
   clearTimeout(flash._t); flash._t=setTimeout(function(){ el.style.display='none'; },2200);
 }
+/* ══ 双源取数（2026-11-25 新增）══════════════════════════════════════
+ * 背景：教练端常在训练馆/校园用手机移动网络打开。textdb.online 是 Cloudflare
+ *      的 .online 域名，在部分运营商网络上连不上（SSL 握手失败 / 连接被重置），
+ *      页面只会弹「读取云端数据失败」，一个数据都读不到 —— 但 GitHub Pages
+ *      域名本身在境内是稳的（页面能打开就是证据）。
+ * 对策：把同一份数据定时镜像到 Pages 同源目录 data/<key>.json，取数时
+ *      「云端优先 → 同源镜像兜底 → 本机缓存」三级降级。
+ *      镜像由 .github/workflows/sync-mirror.yml 定时从云端同步（见该文件）。
+ * 写入（回传）仍走云端 —— 云端不通时宁可失败，也不把数据写进镜像造成分叉。 */
+var MIRROR_DIRS=['data/','../data/','/tixiao-nanpai/data/'];
+function mirrorUrls(k){
+  var out=[],i;
+  for(i=0;i<MIRROR_DIRS.length;i++) out.push(MIRROR_DIRS[i]+encodeURIComponent(k)+'.json');
+  return out;
+}
+/* 依次尝试各镜像路径；404 或空内容都算这一路失败，继续下一路 */
+function fetchMirror(k, ms){
+  var urls=mirrorUrls(k);
+  function tryOne(i){
+    if(i>=urls.length) return Promise.reject(new Error('同源镜像不存在'));
+    return fetchTO(urls[i], null, ms).then(function(r){
+      if(!r || !r.ok) return tryOne(i+1);
+      return r.text();
+    }).then(function(t){
+      if(!t || !t.trim()) return tryOne(i+1);
+      return t;
+    }).catch(function(e){
+      if(i+1>=urls.length) throw e;
+      return tryOne(i+1);
+    });
+  }
+  return tryOne(0);
+}
+/* 云端与镜像并发取，谁先成功用谁；云端内容优先（更新） */
+function fetchDual(k, msCloud){
+  msCloud=msCloud||NET_TO_MS;
+  var cloudP=fetchTO('https://textdb.online/'+k, null, msCloud).then(function(r){ return r.text(); }).catch(function(){ return ''; });
+  var mirrorP=fetchMirror(k, Math.min(msCloud, 8000)).catch(function(){ return ''; });
+  return Promise.all([cloudP, mirrorP]).then(function(res){
+    if(res[0] && res[0].trim()) return {body:res[0], src:'云端'};
+    if(res[1] && res[1].trim()) return {body:res[1], src:'镜像'};
+    return {body:'', src:''};          /* 两边都空：还没人上传过数据 */
+  });
+}
 function fetchCloud(k){
-  var app=$('app'); if(app) app.innerHTML='<div class="card"><p class="hint">正在从云端读取最新数据…</p></div>';
-  fetchTO('https://textdb.online/'+k, null, NET_TO_MS).then(function(r){ return r.text(); }).then(function(t){
+  var app=$('app'); if(app) app.innerHTML='<div class="card"><p class="hint">正在读取最新数据…</p></div>';
+  fetchDual(k, NET_TO_MS).then(function(res){
+    var t=res.body;
     if(!t){ flash('云端还没有数据 —— 主帅在电脑上打开「身体监测」会自动上传', true); render(); return; }
-    try{ SNAP=JSON.parse(t); }catch(e){ flash('云端数据解析失败', true); render(); return; }
-    SNAP_SRC='云端';
+    try{ SNAP=JSON.parse(t); }catch(e){ flash('数据解析失败', true); render(); return; }
+    SNAP_SRC=res.src;
     if(SNAP.key) rememberKey(SNAP.key);
     try{ localStorage.setItem(LS_SNAP, JSON.stringify({at:SNAP.at, snap:SNAP})); }catch(e){}
     hideNetFail();
+    if(res.src==='镜像') flash('云端连不上，已用同源镜像数据（'+esc(SNAP.at||'')+'）', true);
     render();
   }).catch(function(e){
-    flash('云端读取失败：'+e, true); render();
+    flash('读取云端数据失败：'+e, true); render();
     netFail('读取云端数据失败：'+e+'（下面显示的是本机缓存）', function(){ fetchCloud(k); });
   });
 }
